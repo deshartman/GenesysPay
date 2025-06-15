@@ -5,6 +5,18 @@
  * In this particular case, the SIP Domain needs to send a UUI in the SIP header and we extract it as "SipHeader_User-to-User". See https://www.twilio.com/docs/voice/api/sending-sip#uui-user-to-user-information-header
  * Once the call is connected, we call the StatusCallback to write the UUI & callSID in the UUI sync map.
  * 
+ * This can also be done using Twiml:
+ * 
+ * <Response>
+ *    <Dial callerId={{#e164}}{{From}}{{/e164}}>
+ *     <Number {{#e164}}{{To}}{{/e164}}
+ *      statusCallbackEvent: 'answered',
+ *      statusCallback: `/sync/uuiSyncUpdate?CallDirection=toPSTN&UUI={{SipHeader_User-to-User}}`,
+ *      statusCallbackMethod: 'POST'>
+ *    </Number>
+ *    </Dial>
+ * </Response>
+ * 
  */
 exports.handler = async (context, event, callback) => {
 

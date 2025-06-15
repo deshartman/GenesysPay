@@ -8,6 +8,21 @@
  * 2) If it fails, SyncMap uuiMap does not exist, so create it and add new data.
  * 3) Finally, create new call leg.
  * 
+ *  This can also be done using Twiml:
+ * 
+ * <Response>
+ *    <Dial>
+ *      <Sip
+        statusCallbackEvent: 'answered',
+        statusCallback: `/sync/uuiSyncUpdate?CallDirection=toSIP&UUI={{CallSid}}`,
+        statusCallbackMethod: 'POST'>
+ *       sip:{{To}}@{{SIP_DOMAIN_URI}}?User-to-User={{CallSid}}
+ *      </Sip>
+ *    </Dial>
+ * </Response>
+ * 
+
+ * 
  */
 exports.handler = async (context, event, callback) => {
 
