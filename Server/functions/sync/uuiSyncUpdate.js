@@ -41,7 +41,7 @@ exports.handler = async (context, event, callback) => {
   if (uui) {
     try {
       // Write the CallSid into Sync
-      await restClient.sync.services(context.PAY_SYNC_SERVICE_SID)
+      await restClient.sync.v1.services(context.PAY_SYNC_SERVICE_SID)
         .syncMaps(context.SYNC_UUI_MAP_NAME)
         .syncMapItems
         .create({

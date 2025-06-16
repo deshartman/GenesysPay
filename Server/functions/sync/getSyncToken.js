@@ -31,10 +31,11 @@ exports.handler = async (context, event, callback) => {
         context.ACCOUNT_SID,
         context.API_KEY,
         context.API_SECRET,
+        { identity: event.callSid || 'defaultIdentity' }
     );
     // Add the Token specific options
     token.addGrant(syncGrant);
-    token.identity = event.callSid;
+    // token.identity = event.callSid;
 
     if (token) {
         // Serialize the token to a JWT string and include it in a JSON response

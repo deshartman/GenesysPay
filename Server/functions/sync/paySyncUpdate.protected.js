@@ -48,16 +48,20 @@ exports.handler = async (context, event, callback) => {
     // Delete the HTTP headers
     delete event.request;
 
-    await restClient.sync.services(context.PAY_SYNC_SERVICE_SID)
+    console.log(`Updating Pay Map: ${event.Sid} with data: ${JSON.stringify(event)}`);
+
+    await restClient.sync.v1.services(context.PAY_SYNC_SERVICE_SID)
       .syncMaps(context.SYNC_PAY_MAP_NAME)
       .syncMapItems(event.Sid)
       .update({
         data: event
       });
+
+    console.log(`Updated Pay Map: ${event.Sid} `);
   } catch (error) {
-    // console.log("Item does not exist, so create it");
+    console.log("Item does not exist, so create it");
     try {
-      await restClient.sync.services(context.PAY_SYNC_SERVICE_SID)
+      await restClient.sync.v1.services(context.PAY_SYNC_SERVICE_SID)
         .syncMaps(context.SYNC_PAY_MAP_NAME)
         .syncMapItems
         .create({

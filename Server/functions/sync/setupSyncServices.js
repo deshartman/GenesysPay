@@ -29,7 +29,7 @@ exports.handler = async (context, event, callback) => {
 
     // Create the Payment Sync Map
     try {
-      await restClient.sync.services(context.PAY_SYNC_SERVICE_SID)
+      await restClient.sync.v1.services(context.PAY_SYNC_SERVICE_SID)
         .syncMaps
         .create({ uniqueName: context.SYNC_PAY_MAP_NAME });
       console.info(`Sync Map ${context.SYNC_PAY_MAP_NAME} created`);
@@ -42,7 +42,7 @@ exports.handler = async (context, event, callback) => {
 
     // Create the UUI Sync Map
     try {
-      await restClient.sync.services(context.PAY_SYNC_SERVICE_SID)
+      await restClient.sync.v1.services(context.PAY_SYNC_SERVICE_SID)
         .syncMaps
         .create({ uniqueName: context.SYNC_UUI_MAP_NAME });
       console.info(`Sync Map ${context.SYNC_UUI_MAP_NAME} created`);
