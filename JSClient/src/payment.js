@@ -3,12 +3,14 @@ const userCaptureOrderArray = ['payment-card-number', 'security-code', 'expirati
 const chargeAmount = 0;
 const currency = "AUD";
 
-//console.log(", userCaptureOrderArray: ", userCaptureOrderArray);
-
-
-// Global state management
+// File scoped variables
 let callSid = null;
 let paymentSid = null;
+let startedCapturing = false;
+let canSubmit = false;
+let syncClient = null;
+let payMap = null;
+let maskedPayData = {};
 
 /**
  * The payment State defines where in the process of capturing we are. It has three key parameters used to determine state:
@@ -26,11 +28,6 @@ let captureState = {
 
 
 
-let startedCapturing = false;
-let canSubmit = false;
-let syncClient = null;
-let payMap = null;
-let maskedPayData = {};
 
 
 // This function scans the received maskedPayData and performs a few operations:
@@ -108,30 +105,13 @@ const progressCapture = async function () {
     }
 };
 
-/////////////////////////////////////////
-const checkPayProgress = function () {
-    if (startedCapturing) {
-        if (this._required.includes(this._captureOrder[0])) {
-            // continue _capture
-            console.log(`Capturing: [${this._captureOrder[0]}]`);
-        } else {
-            // move to next Capture Type in the list
-            if (this._required.length > 0) {
-                // Remove the current (first) item in capture Order Array
-                this._captureOrder.shift();
-                console.log(`Changing to: ${this._captureOrder[0]}`);
-                this._updateCaptureType(this._captureOrder[0]);
-            } else {
-                // Stop capture
-                this.emit('captureComplete');
-                console.log(`Stopping Capture`);
-            }
-        }
-    } else {
-        console.log(`Not in _capture mode`);
-    }
-};
-////////////////////////////////////////
+// Update input values with payment data
+function updateInputs() {
+    document.getElementById('card').value = maskedPayData.PaymentCardNumber;
+    document.getElementById('cvc').value = maskedPayData.SecurityCode;
+    document.getElementById('date').value = maskedPayData.ExpirationDate;
+}
+
 
 // Initialize Sync client once
 async function initializeSyncClient() {
@@ -170,12 +150,7 @@ async function initializeSyncClient() {
     }
 }
 
-// Update input values with payment data
-function updateInputs() {
-    document.getElementById('card').value = maskedPayData.PaymentCardNumber;
-    document.getElementById('cvc').value = maskedPayData.SecurityCode;
-    document.getElementById('date').value = maskedPayData.ExpirationDate;
-}
+
 
 // Reset input values
 function resetCardInput() {
