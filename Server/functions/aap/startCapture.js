@@ -16,6 +16,8 @@ exports.handler = async (context, event, callback) => {
   // Get a reference to the Twilio REST helper library
   const twilioClient = context.getTwilioClient();
 
+  // console.log(`Starting payment session for event: ${JSON.stringify(event, null, 2)} `);
+
   // Create the payment session
   const sessionData = {
     idempotencyKey: event.callSid + Date.now().toString(),
@@ -37,10 +39,16 @@ exports.handler = async (context, event, callback) => {
       .payments
       .create(sessionData);
 
+    console.log(`Payment session created for callSID: ${event.callSid} with session data: ${JSON.stringify(paymentSession)}`);
+
     twilioResponse.setBody(paymentSession);
     return callback(null, twilioResponse);
   } catch (error) {
+    console.error(`Error starting payment session for callSID: ${event.callSid} - ${error}`);
     twilioResponse.setStatusCode(400);
-    return callback(twilioResponse.setBody(`Error with StartCapture for callSID: ${event.callSid} - ${error}`));
+    twilioResponse.setBody({
+      error: `Invalid Call SID: ${event.callSid}. Please check that the call is active.`
+    });
+    return callback(null, twilioResponse);
   }
 };
