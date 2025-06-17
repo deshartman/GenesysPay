@@ -18,12 +18,18 @@ cd Server
 pnpm install
 ```
 
-3. Create a `.env` file based on `.env copy`:
+3. Install Twilio CLI globally (if not already installed):
+```bash
+npm install -g @twilio/cli
+twilio plugins:install @twilio-labs/plugin-serverless
+```
+
+4. Create a `.env` file based on `.env copy`:
 ```bash
 cp '.env copy' .env
 ```
 
-4. Configure the following environment variables in `.env`:
+5. Configure the following environment variables in `.env`:
 ```
 # Required Twilio credentials
 ACCOUNT_SID=your_twilio_account_sid
@@ -48,7 +54,7 @@ PAY_SYNC_SERVICE_SID=your_sync_service_sid  # Set after running setupSyncService
 # PAY_SYNC_SERVICE_NAME=your_sync_service_name  # Used by setupSyncServices.js
 ```
 
-5. Set up the Sync service (one-time setup):
+6. Set up the Sync service (one-time setup):
 ```bash
 # 1. Uncomment PAY_SYNC_SERVICE_NAME in .env and set a unique name
 # 2. Run the setup endpoint:
@@ -56,31 +62,49 @@ curl -X POST https://<your-runtime-domain>/sync/setupSyncServices
 # 3. Copy the returned service SID to PAY_SYNC_SERVICE_SID in .env
 ```
 
-6. Deploy the serverless functions:
+7. Deploy the serverless functions:
 ```bash
 pnpm deploy
 ```
 
+**Note:** The server automatically copies JSClient files to the `assets/` directory when starting or deploying. This ensures the latest client files are available through the serverless functions.
+
+## Deployment
+
+### Production Deployment
+
+1. Ensure all environment variables are properly configured in the Server's `.env` file
+2. Update SERVER_URL to your production domain (not ngrok)
+3. Deploy to Twilio Serverless:
+```bash
+pnpm deploy
+```
+
+The deployment process will:
+- Copy JSClient files to the assets directory
+- Deploy all serverless functions to Twilio
+- Make your application available at your Twilio Runtime domain
+
+**Note:** If you prefer to use the Twilio CLI directly with `twilio serverless:deploy`, remember to first copy JSClient files to the assets directory:
+```bash
+pnpm run copy-assets
+twilio serverless:deploy
+```
+
+### Environment Configuration for Production
+
+Make sure to update these key variables for production:
+- `SERVER_URL`: Your production domain (remove ngrok domain)
+- `ACCOUNT_SID` and `AUTH_TOKEN`: Your production Twilio credentials
+- `PAY_SYNC_SERVICE_SID`: The Sync service SID from your production setup
+
 ## JSClient
 
-A lightweight HTML/JavaScript client for handling payment processing UI.
+A lightweight HTML/JavaScript client for handling payment processing UI. This is a static client that doesn't require a build process.
 
 ### Setup
 
-1. Navigate to the JSClient directory:
-```bash
-cd JSClient
-```
-
-2. Install dependencies:
-```bash
-pnpm install
-```
-
-3. Start the development server:
-```bash
-pnpm dev
-```
+The JSClient files are static HTML/JavaScript files located in the `JSClient/src/` directory. No installation or build process is required - the files are automatically copied to the Server's assets directory when starting or deploying the server.
 
 ## Phone Call Flow
 
@@ -104,20 +128,38 @@ pnpm dev
    - The payment is processed through the charge endpoint (`functions/connector/charge.js`)
    - Real-time updates are synchronized using Twilio Sync
 
-## Development Workflow
+## Local Development
 
-1. Start both components:
+### Prerequisites for Local Testing
+
+1. Install ngrok globally for creating secure tunnels:
 ```bash
-# Terminal 1 - Server
-cd Server && twilio serverless:start
-
-# Terminal 2 - JSClient
-cd JSClient && pnpm dev
+npm install -g ngrok
 ```
 
-2. Access the application:
-- JSClient: http://localhost:1234 (or the port shown in terminal)
-- Server functions will be available at your Twilio Runtime domain
+### Running Locally
+
+1. Start ngrok tunnel (required for Twilio callbacks):
+```bash
+ngrok http --domain server.ngrok.dev 3000
+```
+This creates a tunnel from your custom ngrok domain to localhost:3000 where pnpm start will run.
+
+2. Update your `.env` file with your ngrok domain:
+```bash
+SERVER_URL=server.ngrok.dev
+```
+
+3. Start the server for local development:
+```bash
+pnpm start
+```
+
+### Access the Application
+
+- JSClient files are served from the Server's assets directory
+- Server functions will be available at your ngrok domain (e.g., https://server.ngrok.dev)
+- The `pnpm start` command automatically copies JSClient files before starting the local server
 
 ## Notes
 
