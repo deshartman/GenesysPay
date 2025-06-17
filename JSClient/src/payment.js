@@ -1,10 +1,9 @@
 // Client-side configuration - these would normally come from environment variables
-const userCaptureOrder = 'payment-card-number,security-code,expiration-date';
+const userCaptureOrderArray = ['payment-card-number', 'security-code', 'expiration-date'];
 const chargeAmount = 0;
 const currency = "AUD";
 
-
-console.log(", userCaptureOrder: ", userCaptureOrder);
+//console.log(", userCaptureOrderArray: ", userCaptureOrderArray);
 
 
 // Global state management
@@ -27,7 +26,6 @@ let captureState = {
 
 
 
-let captureOrder = userCaptureOrder.split(",").map((item) => item.trim());
 let startedCapturing = false;
 let canSubmit = false;
 let syncClient = null;
@@ -64,19 +62,19 @@ const progressCapture = async function () {
         console.log("progressCapture requiredArray: ", requiredArray);
 
         // console.log("maskedPayData.Required: ", maskedPayData.Required);
-        console.log("progressCapture captureOrder: ", captureOrder);
+        console.log("progressCapture userCaptureOrderArray: ", userCaptureOrderArray);
         console.log(
             "progressCapture requiredArray.length: ",
             requiredArray.length,
-            "captureOrder.length: ",
-            captureOrder.length
+            "userCaptureOrderArray.length: ",
+            userCaptureOrderArray.length
         );
 
-        if (requiredArray.length < captureOrder.length) {
-            console.log("progressCapture requiredArray.length < captureOrder.length");
-            // Remove the first element from the captureOrder array
-            captureOrder.shift();
-            console.log("progressCapture captureOrder: ", captureOrder);
+        if (requiredArray.length < userCaptureOrderArray.length) {
+            console.log("progressCapture requiredArray.length < userCaptureOrderArray.length");
+            // Remove the first element from the userCaptureOrderArray
+            userCaptureOrderArray.shift();
+            console.log("progressCapture userCaptureOrderArray: ", userCaptureOrderArray);
             // Call the capture API with the next capture type
             ///////////////////////////////////
             try {
@@ -89,7 +87,7 @@ const progressCapture = async function () {
                     body: JSON.stringify({
                         callSid: callSid,
                         paymentSid: paymentSid,
-                        captureType: captureOrder[0], // Use the first element of the updated captureOrder array
+                        captureType: userCaptureOrderArray[0], // Use the first element of the updated userCaptureOrderArray
                     })
                 });
                 const responseData = await response.json();
@@ -105,7 +103,7 @@ const progressCapture = async function () {
             }
             //////////////////////////////////
         } else {
-            console.log("progressCapture requiredArray.length >= captureOrder.length");
+            console.log("progressCapture requiredArray.length >= userCaptureOrderArray.length");
         }
     }
 };
