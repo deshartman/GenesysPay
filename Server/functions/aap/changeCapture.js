@@ -14,6 +14,8 @@ exports.handler = async (context, event, callback) => {
   // Check if there is a call in progress for this callSid
   const callResource = await twilioClient.calls(event.callSid).fetch();
 
+  console.log(`changeCapture API for callSID: ${event.callSid} - capture Type: ${event.captureType}`);
+
   if (callResource.status !== 'in-progress') {
     return callback(`startCapture error: Call not in progress for ${event.callSid}`);
   }
@@ -28,7 +30,7 @@ exports.handler = async (context, event, callback) => {
         // statusCallback: `/sync/paySyncUpdate`,  // This is the default statusCallback, which is being looked at in https://issues.corp.twilio.com/browse/VAUTO-1432
       });
 
-    console.log(`Payment session updated: ${paymentSession.sid}`);
+    console.log(`Payment session for ${paymentSession.sid} update with captureType: ${event.captureType}`);
     twilioResponse.setBody(paymentSession);
 
     return callback(null, twilioResponse); // Pay Object

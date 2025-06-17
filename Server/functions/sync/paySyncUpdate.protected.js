@@ -69,7 +69,7 @@ exports.handler = async (context, event, callback) => {
           data: event,
           ttl: 43200  // 12 hours
         });
-      console.log(`Created Pay Map: ${event.Sid} and data: ${event}`);
+      console.log(`Created Pay Map: ${event.Sid} and data: ${JSON.stringify(event, null, 2)}`);
     } catch (error) {
       console.error(`Error creating Pay Map: ${error}`);
       return callback(`Error creating Pay Map: ${error}`);
