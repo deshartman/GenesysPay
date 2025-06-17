@@ -1,23 +1,10 @@
 // Client-side configuration - these would normally come from environment variables
-// In a browser environment, these need to be set differently
-const PUBLIC_SERVER_URL = window.location.origin;
-const PUBLIC_PAYMENT_CONNECTOR = 'default';
-const PUBLIC_PAYMENT_CURRENCY = 'USD';
-const PUBLIC_PAYMENT_TOKEN_TYPE = 'one_time';
-const PUBLIC_PAYMENT_CAPTURE_ORDER = 'payment-card-number,security-code,expiration-date';
-const PUBLIC_TWILIO_TOKEN = '';
+const userCaptureOrder = 'payment-card-number,security-code,expiration-date';
+const chargeAmount = 0;
+const currency = "AUD";
 
-// DOM element references - will be initialized after DOM loads
-let callSidInputElement;
-let cardElement;
-let cvcElement;
-let dateElement;
-let errorTextElement;
-let errorMessageElement;
-let callSidDisplayElement;
-let paymentSidDisplayElement;
 
-console.log("PUBLIC_SERVER_URL: ", PUBLIC_SERVER_URL, ", PUBLIC_PAYMENT_CONNECTOR: ", PUBLIC_PAYMENT_CONNECTOR, ", PUBLIC_PAYMENT_CURRENCY: ", PUBLIC_PAYMENT_CURRENCY, ", PUBLIC_PAYMENT_TOKEN_TYPE: ", PUBLIC_PAYMENT_TOKEN_TYPE, ", PUBLIC_PAYMENT_CAPTURE_ORDER: ", PUBLIC_PAYMENT_CAPTURE_ORDER);
+console.log(", userCaptureOrder: ", userCaptureOrder);
 
 
 // Global state management
@@ -40,28 +27,13 @@ let captureState = {
 
 
 
-// Helper function to sync DOM input with global state
-function syncCallSidFromInput() {
-    const inputElement = document.getElementById("callSid");
-    if (inputElement && inputElement.value) {
-        callSid = inputElement.value;
-        console.log('CallSid value from Input screen set to:', callSid);
-    }
-}
-
-var pollTimer;
-let captureOrder = PUBLIC_PAYMENT_CAPTURE_ORDER.split(",").map((item) => item.trim());
+let captureOrder = userCaptureOrder.split(",").map((item) => item.trim());
 let startedCapturing = false;
 let canSubmit = false;
 let syncClient = null;
 let payMap = null;
-let maskedPayData = {
-    ExpirationDate: "-",
-    PaymentCardNumber: "-",
-    PaymentCardType: "-",
-    Required: "payment-card-number,expiration-date,security-code",
-    SecurityCode: "-",
-};
+let maskedPayData = {};
+
 
 // This function scans the received maskedPayData and performs a few operations:
 
@@ -166,7 +138,7 @@ const checkPayProgress = function () {
 // Initialize Sync client once
 async function initializeSyncClient() {
     try {
-        const response = await fetch(PUBLIC_SERVER_URL + "/sync/getSyncToken", {
+        const response = await fetch("/sync/getSyncToken", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -246,7 +218,6 @@ async function submit() {
         console.error('Error changing payment status:', response.statusText);
     }
 
-    // clearInterval(pollTimer);
 }
 
 async function cancel() {
@@ -270,15 +241,16 @@ async function cancel() {
     } else {
         console.error('Error changing payment status:', response.statusText);
     }
-    // clearInterval(pollTimer);
 }
 
 async function startCapture() {
-    syncCallSidFromInput();
-    var chargeAmount = 0;
-    var currency = "AUD";
-
-    console.log('callSid:', callSid);
+    const inputElement = document.getElementById("callSid");
+    if (inputElement && inputElement.value) {
+        callSid = inputElement.value;
+        console.log('CallSid value from Input screen set to:', callSid);
+    } else {
+        console.error('No CallSid from Input screen');
+    }
 
     try {
         // Make a POST request to /aap/StartCapture with the callSid as the JSON body
@@ -307,11 +279,11 @@ async function startCapture() {
         // Show payment view and hide sign in view
         document.getElementById('signInView').style.display = 'none';
         document.getElementById('paymentView').style.display = 'block';
-        
+
         // Update display elements
         document.getElementById('callSidDisplay').innerText = callSid;
-        document.getElementById('paymentSid').innerText = paymentSid;
-        
+        document.getElementById('paymentSidDisplay').innerText = paymentSid;
+
         // Initialize sync client for payment processing
         await initializeSyncClient();
 
