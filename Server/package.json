@@ -1,22 +1,24 @@
 {
   "name": "GenesysPay",
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "An example server for handling payments using Twilio Functions and Sync with a simple JS based frontend server out of Twilio Assets",
   "private": true,
   "source": "assets/payment.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "twilio-run",
-    "deploy": "twilio-run deploy"
+    "copy-assets": "cp -r ../JSClient/src/* assets/",
+    "start": "npm run copy-assets && twilio-run",
+    "deploy": "npm run copy-assets && twilio-run deploy"
   },
   "dependencies": {
     "@twilio/runtime-handler": "2.0.0",
-    "twilio": "^3.56",
+    "twilio": "^5.7.1",
     "twilio-sync": "^3.3.3"
   },
   "devDependencies": {
-    "twilio-run": "^4.0.0"
+    "twilio-run": "^4.0.1"
   },
   "engines": {
-    "node": "18"
+    "node": ">=18"
   }
 }
