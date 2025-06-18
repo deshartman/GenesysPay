@@ -12,6 +12,27 @@ let syncClient = null;
 let payMap = null;
 let maskedPayData = {};
 
+async function callAPI(url, body) {
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const responseData = await response.json();
+
+        if (responseData.error) {
+            return { success: false, result: responseData.error };
+        }
+
+        return { success: true, result: responseData };
+    } catch (error) {
+        return { success: false, result: 'Network error occurred' };
+    }
+}
+
 /**
  * The payment State defines where in the process of capturing we are. It has three key parameters used to determine state:
  * Capture:string - The type of capture that is currently being performed. This can be one of the following: payment-card-number, security-code, expiration-date
@@ -73,32 +94,17 @@ const progressCapture = async function () {
             userCaptureOrderArray.shift();
             console.log("progressCapture userCaptureOrderArray: ", userCaptureOrderArray);
             // Call the capture API with the next capture type
-            ///////////////////////////////////
-            try {
-                // Make a POST request to /aap/changeCapture
-                const response = await fetch('/aap/changeCapture', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        callSid: callSid,
-                        paymentSid: paymentSid,
-                        captureType: userCaptureOrderArray[0], // Use the first element of the updated userCaptureOrderArray
-                    })
-                });
-                const responseData = await response.json();
-                console.log('responseData:', responseData);
+            const { success, result } = await callAPI('/aap/changeCapture', {
+                callSid: callSid,
+                paymentSid: paymentSid,
+                captureType: userCaptureOrderArray[0] // Use the first element of the updated userCaptureOrderArray
+            });
 
-                if (responseData.error) {
-                    showError(responseData.error);
-                    return;
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Network error occurred');
+            if (!success) {
+                showError(result);
+                return;
             }
-            //////////////////////////////////
+
         } else {
             console.log("progressCapture requiredArray.length >= userCaptureOrderArray.length");
         }
@@ -112,107 +118,116 @@ function updateInputs() {
     document.getElementById('date').value = maskedPayData.ExpirationDate;
 }
 
-
 // Initialize Sync client once
 async function initializeSyncClient() {
-    try {
-        const response = await fetch("/sync/getSyncToken", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                identity: callSid
-            })
-        });
-        const jwtToken = await response.json();
+    const { success, result } = await callAPI("/sync/getSyncToken", {
+        identity: callSid
+    });
 
-        // Create Sync Client and payMap
-        syncClient = new Twilio.Sync.Client(jwtToken);
-        payMap = await syncClient.map('payMap');
-        console.log('Client payMap created');
-
-        // Kick off the capture with the first item
-        progressCapture();
-
-        // Add Event Listener for data changes
-        payMap.on('itemUpdated', (args) => {
-            // console.log(`payMap item ${JSON.stringify(args, null, 4)} was UPDATED`);
-            maskedPayData = args.item.data;
-            console.log("Updated maskedPayData: ", JSON.stringify(maskedPayData, null, 4));
-
-            progressCapture();
-            updateInputs();
-        });
-
-    } catch (error) {
-        console.error('Error: Could not create SyncClient', error);
+    if (!success) {
+        console.error('Error: Could not create SyncClient', result);
+        return;
     }
+
+    const jwtToken = result;
+    console.log('JWT Token received:', jwtToken);
+
+    // Create Sync Client and payMap
+    syncClient = new Twilio.Sync.Client(jwtToken);
+    payMap = await syncClient.map('payMap');
+    console.log('Client payMap created');
+
+    // Add Event Listener for data changes
+    payMap.on('itemUpdated', (args) => {
+        maskedPayData = args.item.data;
+        // console.log("Updated maskedPayData: ", JSON.stringify(maskedPayData, null, 4));
+
+        // Just log the following fields for debugging: PaymentCardNumber, SecurityCode, ExpirationDate, Required, PartialResult, Capture
+        console.log("PaymentCardNumber: ", maskedPayData.PaymentCardNumber);
+        console.log("SecurityCode: ", maskedPayData.SecurityCode);
+        console.log("ExpirationDate: ", maskedPayData.ExpirationDate);
+        console.log("Required: ", maskedPayData.Required);
+        console.log("PartialResult: ", maskedPayData.PartialResult);
+        console.log("Capture: ", maskedPayData.Capture);
+
+        //// progressCapture();
+        updateInputs();
+    });
+
 }
-
-
 
 // Reset input values
-function resetCardInput() {
-    maskedPayData.PaymentCardNumber = "-------------------"
-    // document.getElementById('card').value = "";
-    updateInputs();
-}
-function resetCvcInput() {
-    maskedPayData.SecurityCode = "---";
-    // document.getElementById('cvc').value = "";
-    updateInputs();
-}
-function resetDateInput() {
-    maskedPayData.ExpirationDate = "--/--";
-    // document.getElementById('date').value = "";
-    updateInputs();
-}
+async function resetCardInput() {
+    console.log("====================== resetCardInput ======================");
+    // Call the capture API with the next capture type
+    const { success, result } = await callAPI('/aap/changeCapture', {
+        callSid: callSid,
+        paymentSid: paymentSid,
+        captureType: 'payment-card-number'
+    });
 
+    if (!success) {
+        showError(result);
+        return;
+    }
+}
+async function resetCvcInput() {
+    console.log("===================== resetCvcInput called =====================");
+    // Call the capture API with the next capture type
+    const { success, result } = await callAPI('/aap/changeCapture', {
+        callSid: callSid,
+        paymentSid: paymentSid,
+        captureType: 'security-code'
+    });
+
+    if (!success) {
+        showError(result);
+        return;
+    }
+}
+async function resetDateInput() {
+    console.log("===================== resetDateInput called =====================");
+    // Call the capture API with the next capture type
+    const { success, result } = await callAPI('/aap/changeCapture', {
+        callSid: callSid,
+        paymentSid: paymentSid,
+        captureType: 'expiration-date'
+    });
+
+    if (!success) {
+        showError(result);
+        return;
+    }
+}
 async function submit() {
     // This function will be called when the Submit button is clicked
     //Call the /aap/changeStatus API to change the payment status
-    const response = await fetch('/aap/changeStatus', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            callSid: callSid,
-            paymentSid: paymentSid,
-            status: 'complete'
-        })
+    const { success, result } = await callAPI('/aap/changeStatus', {
+        callSid: callSid,
+        paymentSid: paymentSid,
+        status: 'complete'
     });
 
-    if (response.ok) {
-        const data = await response.json();
-        console.log('Payment status changed successfully:', data);
+    if (success) {
+        console.log('Payment status changed successfully:', result);
     } else {
-        console.error('Error changing payment status:', response.statusText);
+        console.error('Error changing payment status:', result);
     }
 
 }
-
 async function cancel() {
     // This function will be called when the Cancel button is clicked
     //Call the /aap/changeStatus API to change the payment status
-    const response = await fetch('/aap/changeStatus', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            callSid: callSid,
-            paymentSid: paymentSid,
-            status: 'cancel'
-        })
+    const { success, result } = await callAPI('/aap/changeStatus', {
+        callSid: callSid,
+        paymentSid: paymentSid,
+        status: 'cancel'
     });
 
-    if (response.ok) {
-        const data = await response.json();
-        console.log('Payment status changed successfully:', data);
+    if (success) {
+        console.log('Payment status changed successfully:', result);
     } else {
-        console.error('Error changing payment status:', response.statusText);
+        console.error('Error changing payment status:', result);
     }
 }
 
@@ -225,56 +240,43 @@ async function startCapture() {
         console.error('No CallSid from Input screen');
     }
 
-    try {
-        // Make a POST request to /aap/StartCapture with the callSid as the JSON body
-        const response = await fetch('/aap/startCapture', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                callSid: callSid,
-                chargeAmount: chargeAmount,
-                currency: currency
-            })
-        });
-        const responseData = await response.json();
-        console.log('responseData:', responseData);
+    const { success, result } = await callAPI('/aap/startCapture', {
+        callSid: callSid,
+        chargeAmount: chargeAmount,
+        currency: currency
+    });
 
-        if (responseData.error) {
-            showError(responseData.error);
-            return;
-        }
-
-        paymentSid = responseData.sid;
-        console.log('paymentSid set to:', paymentSid);
-
-        // Show payment view and hide sign in view
-        document.getElementById('signInView').style.display = 'none';
-        document.getElementById('paymentView').style.display = 'block';
-
-        // Update display elements
-        document.getElementById('callSidDisplay').innerText = callSid;
-        document.getElementById('paymentSidDisplay').innerText = paymentSid;
-
-        // Initialize sync client for payment processing
-        await initializeSyncClient();
-
-    } catch (error) {
-        console.error('Error:', error);
-        showError('Network error occurred');
+    if (!success) {
+        showError(result);
+        return;
     }
+
+    console.log('responseData:', result);
+    paymentSid = result.sid;
+    console.log('paymentSid set to:', paymentSid);
+
+    // Show payment view and hide sign in view
+    document.getElementById('signInView').style.display = 'none';
+    document.getElementById('paymentView').style.display = 'block';
+
+    // Update display elements
+    document.getElementById('callSidDisplay').innerText = callSid;
+    document.getElementById('paymentSidDisplay').innerText = paymentSid;
+
+    // Initialize sync client for payment processing
+    await initializeSyncClient();
+
+    // Kick off the capture with the first item
+    progressCapture();
 }
 
 function showError(message) {
     document.getElementById('errorText').textContent = message;
     document.getElementById('errorMessage').style.display = 'block';
 }
-
 function hideError() {
     document.getElementById('errorMessage').style.display = 'none';
 }
-
 
 // Page load
 window.onload = function () {
