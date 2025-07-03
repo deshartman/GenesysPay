@@ -1,10 +1,23 @@
+/**
+ * PaymentClient class for handling payment capture and management.
+ * This class extends EventTarget to allow for event-driven updates.
+ * It provides methods to start capturing payment details, reset inputs, and submit or cancel payments.
+ * It also manages the interaction with a Sync Map to store and retrieve payment data.
+ * 
+ * This implementation automatically progresses through the capture steps and the way the class works with which input is next is as follows:
+ * There is a user preference array that allows the user to decide the order in which they want to capture payment details: userCaptureOrderArray
+ * The response from the server contains a Required field which is a comma-separated list of required fields. The length and content of this array is used to step to the next step.
+ * The actual step and thus call is determined by the userCaptureOrderArray
+ * 
+ * You can also reset a filed by calling the reset function. This simply shifts the field to the front of the userCaptureOrderArray and calls the changeCapture API, adding that step back to the Required array.
+ */
 class PaymentClient extends EventTarget {
     constructor() {
         super();
         this.userCaptureOrderArray = ['payment-card-number', 'security-code', 'expiration-date'];
         this.chargeAmount = 0;
         this.currency = "AUD";
-        
+
         this.callSid = null;
         this.paymentSid = null;
         this.startedCapturing = false;
@@ -37,40 +50,66 @@ class PaymentClient extends EventTarget {
 
     progressCapture = async () => {
         console.log("progressCapture maskedPayData: ", JSON.stringify(this.maskedPayData, null, 4));
-        
+
+        // Early return: Only proceed if capture has been started
+        if (!this.startedCapturing) {
+            console.log("progressCapture: capture not started yet, skipping");
+            return;
+        }
+
+        // Early return: Complete capture if no required fields
         if (!this.maskedPayData.Required) {
             console.log("progressCapture maskedPayData.Required is not present");
-            console.log("startedCapturing: ", this.startedCapturing);
-            if (this.startedCapturing) {
-                console.log("progressCapture startedCapturing is true and stopping polling");
-                this.canSubmit = true;
-            }
-        } else {
-            this.startedCapturing = true;
-            console.log("startedCapturing: ", this.startedCapturing);
+            console.log("progressCapture: all fields captured, stopping capture");
+            this.canSubmit = true;
+            this.dispatchEvent(new CustomEvent('captureComplete', { 
+                detail: { message: 'All payment fields captured successfully' }
+            }));
+            return;
+        }
 
-            const requiredArray = this.maskedPayData.Required.split(",").map((item) => item.trim());
-            console.log("progressCapture requiredArray: ", requiredArray);
-            console.log("progressCapture userCaptureOrderArray: ", this.userCaptureOrderArray);
+        const requiredArray = this.maskedPayData.Required.split(",").map((item) => item.trim());
+        console.log("progressCapture requiredArray: ", requiredArray);
+        console.log("progressCapture userCaptureOrderArray: ", this.userCaptureOrderArray);
 
-            if (requiredArray.length < this.userCaptureOrderArray.length) {
-                console.log("progressCapture requiredArray.length < userCaptureOrderArray.length");
-                this.userCaptureOrderArray.shift();
-                console.log("progressCapture userCaptureOrderArray: ", this.userCaptureOrderArray);
-                
-                const { success, result } = await this.callAPI('/aap/changeCapture', {
-                    callSid: this.callSid,
-                    paymentSid: this.paymentSid,
-                    captureType: this.userCaptureOrderArray[0]
-                });
+        const currentCaptureType = this.userCaptureOrderArray[0];
+        
+        // Early return: Continue current capture if still required
+        if (!currentCaptureType || requiredArray.includes(currentCaptureType)) {
+            console.log(`progressCapture: continuing to capture ${currentCaptureType}`);
+            return;
+        }
 
-                if (!success) {
-                    this.dispatchEvent(new CustomEvent('error', { detail: result }));
-                    return;
-                }
-            } else {
-                console.log("progressCapture requiredArray.length >= userCaptureOrderArray.length");
-            }
+        console.log(`progressCapture: ${currentCaptureType} no longer required, progressing`);
+        
+        // Early return: Complete capture if no more required fields
+        if (requiredArray.length === 0) {
+            console.log("progressCapture: no more required fields, completing capture");
+            this.canSubmit = true;
+            this.dispatchEvent(new CustomEvent('captureComplete', { 
+                detail: { message: 'All payment fields captured successfully' }
+            }));
+            return;
+        }
+
+        // Progress to next capture type
+        this.userCaptureOrderArray.shift();
+        console.log("progressCapture userCaptureOrderArray after shift: ", this.userCaptureOrderArray);
+        
+        // Early return: No more items to capture
+        if (this.userCaptureOrderArray.length === 0) {
+            console.log("progressCapture: no more items in capture order");
+            return;
+        }
+
+        const { success, result } = await this.callAPI('/aap/changeCapture', {
+            callSid: this.callSid,
+            paymentSid: this.paymentSid,
+            captureType: this.userCaptureOrderArray[0]
+        });
+
+        if (!success) {
+            this.dispatchEvent(new CustomEvent('error', { detail: result }));
         }
     };
 
@@ -107,18 +146,25 @@ class PaymentClient extends EventTarget {
             console.log("PartialResult: ", this.maskedPayData.PartialResult);
             console.log("Capture: ", this.maskedPayData.Capture);
 
-            this.dispatchEvent(new CustomEvent('paymentDataUpdated', { 
-                detail: this.maskedPayData 
+            this.dispatchEvent(new CustomEvent('paymentDataUpdated', {
+                detail: this.maskedPayData
             }));
         });
     }
 
     async resetCardInput() {
         console.log("====================== resetCardInput ======================");
+        if (this.userCaptureOrderArray[0] === "payment-card-number") {
+            console.log("resetCardInput: payment-card-number is already the first item in userCaptureOrderArray");
+        } else {
+            console.log("resetCardInput: payment-card-number is not the first item in userCaptureOrderArray, shifting it to the front");
+            this.userCaptureOrderArray.unshift('payment-card-number');
+        }
+
         const { success, result } = await this.callAPI('/aap/changeCapture', {
             callSid: this.callSid,
             paymentSid: this.paymentSid,
-            captureType: 'payment-card-number'
+            captureType: this.userCaptureOrderArray[0]
         });
 
         if (!success) {
@@ -129,10 +175,18 @@ class PaymentClient extends EventTarget {
 
     async resetCvcInput() {
         console.log("===================== resetCvcInput called =====================");
+        if (this.userCaptureOrderArray[0] === "security-code") {
+            console.log("resetCvcInput: security-code is already the first item in userCaptureOrderArray");
+        }
+        else {
+            console.log("resetCvcInput: security-code is not the first item in userCaptureOrderArray, shifting it to the front");
+            this.userCaptureOrderArray.unshift('security-code');
+        }
+
         const { success, result } = await this.callAPI('/aap/changeCapture', {
             callSid: this.callSid,
             paymentSid: this.paymentSid,
-            captureType: 'security-code'
+            captureType: this.userCaptureOrderArray[0]
         });
 
         if (!success) {
@@ -143,10 +197,18 @@ class PaymentClient extends EventTarget {
 
     async resetDateInput() {
         console.log("===================== resetDateInput called =====================");
+        if (this.userCaptureOrderArray[0] === "expiration-date") {
+            console.log("resetDateInput: expiration-date is already the first item in userCaptureOrderArray");
+        }
+        else {
+            console.log("resetDateInput: expiration-date is not the first item in userCaptureOrderArray, shifting it to the front");
+            this.userCaptureOrderArray.unshift('expiration-date');
+        }
+
         const { success, result } = await this.callAPI('/aap/changeCapture', {
             callSid: this.callSid,
             paymentSid: this.paymentSid,
-            captureType: 'expiration-date'
+            captureType: this.userCaptureOrderArray[0]
         });
 
         if (!success) {
@@ -206,14 +268,15 @@ class PaymentClient extends EventTarget {
         this.paymentSid = result.sid;
         console.log('paymentSid set to:', this.paymentSid);
 
-        this.dispatchEvent(new CustomEvent('captureStarted', { 
-            detail: { 
-                callSid: this.callSid, 
-                paymentSid: this.paymentSid 
-            } 
+        this.dispatchEvent(new CustomEvent('captureStarted', {
+            detail: {
+                callSid: this.callSid,
+                paymentSid: this.paymentSid
+            }
         }));
 
         await this.initializeSyncClient();
+        this.startedCapturing = true;
         this.progressCapture();
     }
 }

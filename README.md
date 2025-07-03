@@ -128,6 +128,61 @@ The JSClient files are static HTML/JavaScript files located in the `JSClient/src
    - The payment is processed through the charge endpoint (`functions/connector/charge.js`)
    - Real-time updates are synchronized using Twilio Sync
 
+## Automatic Payment Capture Logic
+
+The JSClient implements intelligent automatic progression through payment field capture, eliminating the need for manual intervention between payment steps.
+
+### How It Works
+
+1. **User-Defined Capture Order**
+   - The system uses a configurable `userCaptureOrderArray` that defines the preferred order for capturing payment information
+   - Default order: `['payment-card-number', 'security-code', 'expiration-date']`
+   - This can be customized based on business requirements or user preferences
+
+2. **Server Response Tracking**
+   - The server responds with a `Required` field containing a comma-separated list of payment fields still needed
+   - Example: `"payment-card-number, expiration-date, security-code"`
+   - As fields are successfully captured, they are removed from this list
+
+3. **Automatic Progression Logic**
+   - The system continuously monitors the `Required` field from server responses
+   - When a field is no longer in the `Required` list, it automatically progresses to the next field in the `userCaptureOrderArray`
+   - This happens transparently without user intervention
+
+4. **Content-Based Validation**
+   - Instead of simply counting fields, the system validates the actual content
+   - Checks if the current capture type is still present in the `Required` array
+   - Only progresses when the current field is confirmed as captured by the server
+
+### Example Flow
+
+**Initial State:**
+- Capture Order: `['payment-card-number', 'security-code', 'expiration-date']`
+- Server Required: `'payment-card-number, expiration-date, security-code'`
+
+**Step 1:** User enters card number
+- Server Required becomes: `'expiration-date, security-code'`
+- System detects `payment-card-number` is no longer required
+- Automatically switches to `security-code` capture
+
+**Step 2:** User enters security code
+- Server Required becomes: `'expiration-date'`
+- System detects `security-code` is no longer required
+- Automatically switches to `expiration-date` capture
+
+**Step 3:** User enters expiration date
+- Server Required becomes: `''` (empty)
+- System detects all fields captured
+- Enables submit button and emits completion event
+
+### Benefits
+
+- **Seamless User Experience**: No manual clicking between fields
+- **Flexible Ordering**: Easily customize capture sequence
+- **Robust Validation**: Content-based progression prevents errors
+- **Error Recovery**: Individual fields can be reset and recaptured
+- **Real-time Sync**: Uses Twilio Sync for instant updates
+
 ## Local Development
 
 ### Prerequisites for Local Testing
