@@ -15,6 +15,7 @@ class PaymentClient extends EventTarget {
     constructor() {
         super();
         this.userCaptureOrderArray = ['payment-card-number', 'security-code', 'expiration-date'];
+        this.userCaptureOrderTemplate = this.userCaptureOrderArray.slice(); // Template for resets
         this.chargeAmount = 0;
         this.currency = "AUD";
 
@@ -25,6 +26,11 @@ class PaymentClient extends EventTarget {
         this.syncClient = null;
         this.payMap = null;
         this.maskedPayData = {};
+        
+        // State variables matching GitHub version
+        this.capture = null;
+        this.required = [];
+        this.partialResult = null;
     }
 
     async callAPI(url, body) {
@@ -49,44 +55,44 @@ class PaymentClient extends EventTarget {
     }
 
     progressCapture = async () => {
-        console.log("progressCapture maskedPayData: ", JSON.stringify(this.maskedPayData, null, 4));
+        console.log("SYNC_FLOW: === progressCapture called ===");
+        console.log("SYNC_FLOW: maskedPayData: ", JSON.stringify(this.maskedPayData, null, 4));
 
         // Early return: Only proceed if capture has been started
         if (!this.startedCapturing) {
-            console.log("progressCapture: capture not started yet, skipping");
+            console.log("SYNC_FLOW: capture not started yet, skipping");
             return;
         }
 
-        // Early return: Complete capture if no required fields
-        if (!this.maskedPayData.Required) {
-            console.log("progressCapture maskedPayData.Required is not present");
-            console.log("progressCapture: all fields captured, stopping capture");
-            this.canSubmit = true;
-            this.dispatchEvent(new CustomEvent('captureComplete', { 
-                detail: { message: 'All payment fields captured successfully' }
-            }));
+        // Early return: Wait for sync data if Required is not yet available
+        if (!this.capture) {
+            console.log("SYNC_FLOW: not in capture mode, skipping");
             return;
         }
 
-        const requiredArray = this.maskedPayData.Required.split(",").map((item) => item.trim());
-        console.log("progressCapture requiredArray: ", requiredArray);
-        console.log("progressCapture userCaptureOrderArray: ", this.userCaptureOrderArray);
+        const requiredArray = Array.isArray(this.required) ?
+            this.required :
+            (this.required ? this.required.split(",").map((item) => item.trim()) : []);
+
+        console.log("SYNC_FLOW: requiredArray: ", requiredArray);
+        console.log("SYNC_FLOW: userCaptureOrderArray: ", this.userCaptureOrderArray);
 
         const currentCaptureType = this.userCaptureOrderArray[0];
-        
-        // Early return: Continue current capture if still required
-        if (!currentCaptureType || requiredArray.includes(currentCaptureType)) {
-            console.log(`progressCapture: continuing to capture ${currentCaptureType}`);
+        console.log("SYNC_FLOW: currentCaptureType: ", currentCaptureType);
+
+        // GitHub logic: Check if current capture type is still required
+        if (requiredArray.includes(currentCaptureType)) {
+            console.log(`SYNC_FLOW: continuing to capture ${currentCaptureType}`);
             return;
         }
 
-        console.log(`progressCapture: ${currentCaptureType} no longer required, progressing`);
-        
+        console.log(`SYNC_FLOW: ${currentCaptureType} no longer required, progressing`);
+
         // Early return: Complete capture if no more required fields
         if (requiredArray.length === 0) {
-            console.log("progressCapture: no more required fields, completing capture");
+            console.log("SYNC_FLOW: all fields captured, stopping capture");
             this.canSubmit = true;
-            this.dispatchEvent(new CustomEvent('captureComplete', { 
+            this.dispatchEvent(new CustomEvent('captureComplete', {
                 detail: { message: 'All payment fields captured successfully' }
             }));
             return;
@@ -94,14 +100,15 @@ class PaymentClient extends EventTarget {
 
         // Progress to next capture type
         this.userCaptureOrderArray.shift();
-        console.log("progressCapture userCaptureOrderArray after shift: ", this.userCaptureOrderArray);
-        
+        console.log("SYNC_FLOW: userCaptureOrderArray after shift: ", this.userCaptureOrderArray);
+
         // Early return: No more items to capture
         if (this.userCaptureOrderArray.length === 0) {
-            console.log("progressCapture: no more items in capture order");
+            console.log("SYNC_FLOW: no more items in capture order");
             return;
         }
 
+        console.log(`SYNC_FLOW: Calling API to change capture to: ${this.userCaptureOrderArray[0]}`);
         const { success, result } = await this.callAPI('/aap/changeCapture', {
             callSid: this.callSid,
             paymentSid: this.paymentSid,
@@ -109,7 +116,10 @@ class PaymentClient extends EventTarget {
         });
 
         if (!success) {
+            console.log("SYNC_FLOW: API call failed:", result);
             this.dispatchEvent(new CustomEvent('error', { detail: result }));
+        } else {
+            console.log("SYNC_FLOW: API call successful, waiting for sync update...");
         }
     };
 
@@ -134,21 +144,39 @@ class PaymentClient extends EventTarget {
 
         this.syncClient = new Twilio.Sync.Client(jwtToken);
         this.payMap = await this.syncClient.map('payMap');
-        console.log('Client payMap created');
+        console.log(`Client payMap created: ${this.payMap.sid}`);
+
+        this.payMap.on('itemAdded', (args) => {
+            console.log("SYNC_FLOW: Item ADDED to payMap:", args.item.key);
+            console.log("SYNC_FLOW: Added item data:", args.item.data);
+        });
 
         this.payMap.on('itemUpdated', (args) => {
+            console.log("SYNC_FLOW: Item updated in payMap:", args.item.key);
+            console.log("SYNC_FLOW: Updated item data:", args.item.data);
+            
+            // Store complete data object
             this.maskedPayData = args.item.data;
+            
+            // Extract key state variables for progress logic
+            this.capture = args.item.data.Capture;
+            this.partialResult = args.item.data.PartialResult;
+            this.required = args.item.data.Required;
 
             console.log("PaymentCardNumber: ", this.maskedPayData.PaymentCardNumber);
             console.log("SecurityCode: ", this.maskedPayData.SecurityCode);
             console.log("ExpirationDate: ", this.maskedPayData.ExpirationDate);
-            console.log("Required: ", this.maskedPayData.Required);
-            console.log("PartialResult: ", this.maskedPayData.PartialResult);
-            console.log("Capture: ", this.maskedPayData.Capture);
+            console.log("SYNC_FLOW: Required: ", this.required);
+            console.log("SYNC_FLOW: PartialResult: ", this.partialResult);
+            console.log("SYNC_FLOW: Capture: ", this.capture);
 
             this.dispatchEvent(new CustomEvent('paymentDataUpdated', {
                 detail: this.maskedPayData
             }));
+
+            // Check progress after data update - CRITICAL
+            console.log("SYNC_FLOW: Calling progressCapture after sync update");
+            this.progressCapture();
         });
     }
 
@@ -253,6 +281,10 @@ class PaymentClient extends EventTarget {
         this.callSid = inputCallSid;
         console.log('CallSid value set to:', this.callSid);
 
+        // Reset capture order from template
+        this.userCaptureOrderArray = this.userCaptureOrderTemplate.slice();
+        console.log('SYNC_FLOW: Reset capture order to:', this.userCaptureOrderArray);
+
         const { success, result } = await this.callAPI('/aap/startCapture', {
             callSid: this.callSid,
             chargeAmount: this.chargeAmount,
@@ -267,6 +299,7 @@ class PaymentClient extends EventTarget {
         console.log('responseData:', result);
         this.paymentSid = result.sid;
         console.log('paymentSid set to:', this.paymentSid);
+        console.log('SYNC_FLOW: Payment started, paymentSid:', this.paymentSid);
 
         this.dispatchEvent(new CustomEvent('captureStarted', {
             detail: {
@@ -277,7 +310,22 @@ class PaymentClient extends EventTarget {
 
         await this.initializeSyncClient();
         this.startedCapturing = true;
-        this.progressCapture();
+        console.log('SYNC_FLOW: Capture started, waiting for sync updates...');
+        
+        // Automatically start the first capture step
+        console.log('SYNC_FLOW: Starting first capture step:', this.userCaptureOrderArray[0]);
+        const { success: captureSuccess, result: captureResult } = await this.callAPI('/aap/changeCapture', {
+            callSid: this.callSid,
+            paymentSid: this.paymentSid,
+            captureType: this.userCaptureOrderArray[0]
+        });
+
+        if (!captureSuccess) {
+            console.log('SYNC_FLOW: Initial capture API call failed:', captureResult);
+            this.dispatchEvent(new CustomEvent('error', { detail: captureResult }));
+        } else {
+            console.log('SYNC_FLOW: Initial capture API call successful, waiting for sync update...');
+        }
     }
 }
 
