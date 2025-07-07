@@ -202,11 +202,6 @@ class PaymentClient extends EventTarget {
         this.payMap = await this.syncClient.map('payMap');
         console.log(`Client payMap created: ${this.payMap.sid}`);
 
-        this.payMap.on('itemAdded', (args: SyncMapEventArgs) => {
-            console.log("Item ADDED to payMap:", args.item.key);
-            console.log("Added item data:", args.item.data);
-        });
-
         this.payMap.on('itemUpdated', (args: SyncMapEventArgs) => {
             console.log("Item updated in payMap:", args.item.key);
             console.log("Updated item data:", args.item.data);
@@ -219,9 +214,6 @@ class PaymentClient extends EventTarget {
             this.partialResult = this.maskedPayData.PartialResult || null;
             this.required = this.maskedPayData.Required ? this.maskedPayData.Required.split(',').map(s => s.trim()) : [];
 
-            console.log("PaymentCardNumber: ", this.maskedPayData.PaymentCardNumber);
-            console.log("SecurityCode: ", this.maskedPayData.SecurityCode);
-            console.log("ExpirationDate: ", this.maskedPayData.ExpirationDate);
             console.log("Required: ", this.required);
             console.log("PartialResult: ", this.partialResult);
             console.log("Capture: ", this.capture);
