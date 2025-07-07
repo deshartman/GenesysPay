@@ -12,13 +12,17 @@
  * You can also reset a filed by calling the reset function. This simply shifts the field to the front of the userCaptureOrderArray and calls the changeCapture API, adding that step back to the Required array.
  */
 class PaymentClient extends EventTarget {
-    constructor() {
+    constructor(
+        userCaptureOrderArray = ['payment-card-number', 'security-code', 'expiration-date'],
+        chargeAmount = 0,
+        currency = "AUD"
+    ) {
         super();
-        this.userCaptureOrderArray = ['payment-card-number', 'security-code', 'expiration-date'];
-        this.userCaptureOrderTemplate = this.userCaptureOrderArray.slice(); // Template for resets
-        this.chargeAmount = 0;
-        this.currency = "AUD";
+        this.userCaptureOrderArray = userCaptureOrderArray;
+        this.chargeAmount = chargeAmount;
+        this.currency = currency;
 
+        this.userCaptureOrderTemplate = this.userCaptureOrderArray.slice(); // Template for resets
         this.callSid = null;
         this.paymentSid = null;
         this.startedCapturing = false;
@@ -27,7 +31,7 @@ class PaymentClient extends EventTarget {
         this.payMap = null;
         this.maskedPayData = {};
 
-        // State variables matching GitHub version
+        // State variables
         this.capture = null;
         this.required = [];
         this.partialResult = null;
@@ -55,7 +59,7 @@ class PaymentClient extends EventTarget {
     }
 
     progressCapture = async () => {
-        console.log("=== progressCapture maskedPayData: ", JSON.stringify(this.maskedPayData, null, 4));
+        // console.log("progressCapture maskedPayData: ", JSON.stringify(this.maskedPayData, null, 4));
 
         // Early return: Only proceed if capture has been started
         if (!this.startedCapturing) {
@@ -69,9 +73,14 @@ class PaymentClient extends EventTarget {
             return;
         }
 
-        const requiredArray = Array.isArray(this.required) ?
-            this.required :
-            (this.required ? this.required.split(",").map((item) => item.trim()) : []);
+        let requiredArray;
+        if (Array.isArray(this.required)) {
+            requiredArray = this.required;
+        } else if (this.required) {
+            requiredArray = this.required.split(",").map((item) => item.trim());
+        } else {
+            requiredArray = [];
+        }
 
         console.log("requiredArray: ", requiredArray);
         console.log("userCaptureOrderArray: ", this.userCaptureOrderArray);
