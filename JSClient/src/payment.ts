@@ -1,3 +1,54 @@
+// Global declarations for browser-based Twilio Sync
+declare global {
+    interface Window {
+        Twilio: {
+            Sync: {
+                Client: new (token: string) => TwilioSyncClient;
+            };
+        };
+    }
+}
+
+interface TwilioSyncClient {
+    map(name: string): Promise<TwilioSyncMap>;
+}
+
+interface TwilioSyncMap {
+    sid: string;
+    on(event: 'itemAdded' | 'itemUpdated', callback: (args: SyncMapEventArgs) => void): void;
+}
+
+interface TwilioSyncMapItem {
+    key: string;
+    data: any;
+}
+
+interface PaymentSyncData {
+    PaymentCardNumber?: string;
+    SecurityCode?: string;
+    ExpirationDate?: string;
+    Capture?: string;
+    PartialResult?: string;
+    Required?: string;
+}
+
+interface ApiResponse<T = any> {
+    success: boolean;
+    result: T;
+}
+
+interface StartCaptureResponse {
+    sid: string;
+}
+
+interface SyncMapEventArgs {
+    item: TwilioSyncMapItem;
+    isLocal: boolean;
+    previousItemData?: any;
+}
+
+type CaptureType = 'payment-card-number' | 'security-code' | 'expiration-date';
+
 /**
  * PaymentClient class for handling payment capture and management.
  * This class extends EventTarget to allow for event-driven updates.
@@ -12,32 +63,36 @@
  * You can also reset a filed by calling the reset function. This simply shifts the field to the front of the userCaptureOrderArray and calls the changeCapture API, adding that step back to the Required array.
  */
 class PaymentClient extends EventTarget {
+    private userCaptureOrderArray: CaptureType[];
+    private userCaptureOrderTemplate: CaptureType[];
+    private chargeAmount: number;
+    private currency: string;
+    private callSid: string | null = null;
+    private paymentSid: string | null = null;
+    private startedCapturing: boolean = false;
+    private canSubmit: boolean = false;
+    private syncClient: TwilioSyncClient | null = null;
+    private payMap: TwilioSyncMap | null = null;
+    private maskedPayData: PaymentSyncData = {};
+
+    // State variables
+    private capture: string | null = null;
+    private required: string | string[] = [];
+    private partialResult: string | null = null;
+
     constructor(
-        userCaptureOrderArray = ['payment-card-number', 'security-code', 'expiration-date'],
-        chargeAmount = 0,
-        currency = "AUD"
+        userCaptureOrderArray: CaptureType[] = ['payment-card-number', 'security-code', 'expiration-date'],
+        chargeAmount: number = 0,
+        currency: string = "AUD"
     ) {
         super();
         this.userCaptureOrderArray = userCaptureOrderArray;
         this.chargeAmount = chargeAmount;
         this.currency = currency;
-
-        this.userCaptureOrderTemplate = this.userCaptureOrderArray.slice(); // Template for resets
-        this.callSid = null;
-        this.paymentSid = null;
-        this.startedCapturing = false;
-        this.canSubmit = false;
-        this.syncClient = null;
-        this.payMap = null;
-        this.maskedPayData = {};
-
-        // State variables
-        this.capture = null;
-        this.required = [];
-        this.partialResult = null;
+        this.userCaptureOrderTemplate = this.userCaptureOrderArray.slice();
     }
 
-    async callAPI(url, body) {
+    private async callAPI(url: string, body: Record<string, any>): Promise<ApiResponse> {
         try {
             const response = await fetch(url, {
                 method: 'POST',
@@ -58,9 +113,7 @@ class PaymentClient extends EventTarget {
         }
     }
 
-    progressCapture = async () => {
-        // console.log("progressCapture maskedPayData: ", JSON.stringify(this.maskedPayData, null, 4));
-
+    public progressCapture = async (): Promise<void> => {
         // Early return: Only proceed if capture has been started
         if (!this.startedCapturing) {
             console.log("capture not started yet, skipping");
@@ -73,7 +126,7 @@ class PaymentClient extends EventTarget {
             return;
         }
 
-        let requiredArray;
+        let requiredArray: string[];
         if (Array.isArray(this.required)) {
             requiredArray = this.required;
         } else if (this.required) {
@@ -88,7 +141,7 @@ class PaymentClient extends EventTarget {
         const currentCaptureType = this.userCaptureOrderArray[0];
         console.log("currentCaptureType: ", currentCaptureType);
 
-        // GitHub logic: Check if current capture type is still required
+        // Check if current capture type is still required
         if (requiredArray.includes(currentCaptureType)) {
             console.log(`continuing to capture ${currentCaptureType}`);
             return;
@@ -131,7 +184,7 @@ class PaymentClient extends EventTarget {
         }
     };
 
-    async initializeSyncClient() {
+    private async initializeSyncClient(): Promise<void> {
         const { success, result } = await this.callAPI("/sync/getSyncToken", {
             identity: this.callSid
         });
@@ -145,26 +198,26 @@ class PaymentClient extends EventTarget {
         const jwtToken = result;
         console.log('JWT Token received:', jwtToken);
 
-        this.syncClient = new Twilio.Sync.Client(jwtToken);
+        this.syncClient = new window.Twilio.Sync.Client(jwtToken);
         this.payMap = await this.syncClient.map('payMap');
         console.log(`Client payMap created: ${this.payMap.sid}`);
 
-        this.payMap.on('itemAdded', (args) => {
+        this.payMap.on('itemAdded', (args: SyncMapEventArgs) => {
             console.log("Item ADDED to payMap:", args.item.key);
             console.log("Added item data:", args.item.data);
         });
 
-        this.payMap.on('itemUpdated', (args) => {
+        this.payMap.on('itemUpdated', (args: SyncMapEventArgs) => {
             console.log("Item updated in payMap:", args.item.key);
             console.log("Updated item data:", args.item.data);
 
             // Store complete data object
-            this.maskedPayData = args.item.data;
+            this.maskedPayData = args.item.data as PaymentSyncData;
 
             // Extract key state variables for progress logic
-            this.capture = args.item.data.Capture;
-            this.partialResult = args.item.data.PartialResult;
-            this.required = args.item.data.Required;
+            this.capture = this.maskedPayData.Capture || null;
+            this.partialResult = this.maskedPayData.PartialResult || null;
+            this.required = this.maskedPayData.Required ? this.maskedPayData.Required.split(',').map(s => s.trim()) : [];
 
             console.log("PaymentCardNumber: ", this.maskedPayData.PaymentCardNumber);
             console.log("SecurityCode: ", this.maskedPayData.SecurityCode);
@@ -183,7 +236,7 @@ class PaymentClient extends EventTarget {
         });
     }
 
-    async resetCardInput() {
+    public async resetCardInput(): Promise<void> {
         console.log("====================== resetCardInput ======================");
         if (this.userCaptureOrderArray[0] === "payment-card-number") {
             console.log("resetCardInput: payment-card-number is already the first item in userCaptureOrderArray");
@@ -204,12 +257,11 @@ class PaymentClient extends EventTarget {
         }
     }
 
-    async resetCvcInput() {
+    public async resetCvcInput(): Promise<void> {
         console.log("===================== resetCvcInput called =====================");
         if (this.userCaptureOrderArray[0] === "security-code") {
             console.log("resetCvcInput: security-code is already the first item in userCaptureOrderArray");
-        }
-        else {
+        } else {
             console.log("resetCvcInput: security-code is not the first item in userCaptureOrderArray, shifting it to the front");
             this.userCaptureOrderArray.unshift('security-code');
         }
@@ -226,12 +278,11 @@ class PaymentClient extends EventTarget {
         }
     }
 
-    async resetDateInput() {
+    public async resetDateInput(): Promise<void> {
         console.log("===================== resetDateInput called =====================");
         if (this.userCaptureOrderArray[0] === "expiration-date") {
             console.log("resetDateInput: expiration-date is already the first item in userCaptureOrderArray");
-        }
-        else {
+        } else {
             console.log("resetDateInput: expiration-date is not the first item in userCaptureOrderArray, shifting it to the front");
             this.userCaptureOrderArray.unshift('expiration-date');
         }
@@ -248,7 +299,7 @@ class PaymentClient extends EventTarget {
         }
     }
 
-    async submit() {
+    public async submit(): Promise<void> {
         const { success, result } = await this.callAPI('/aap/changeStatus', {
             callSid: this.callSid,
             paymentSid: this.paymentSid,
@@ -264,7 +315,7 @@ class PaymentClient extends EventTarget {
         }
     }
 
-    async cancel() {
+    public async cancel(): Promise<void> {
         const { success, result } = await this.callAPI('/aap/changeStatus', {
             callSid: this.callSid,
             paymentSid: this.paymentSid,
@@ -280,7 +331,7 @@ class PaymentClient extends EventTarget {
         }
     }
 
-    async startCapture(inputCallSid) {
+    public async startCapture(inputCallSid: string): Promise<void> {
         this.callSid = inputCallSid;
         console.log('CallSid value set to:', this.callSid);
 
@@ -300,7 +351,7 @@ class PaymentClient extends EventTarget {
         }
 
         console.log('responseData:', result);
-        this.paymentSid = result.sid;
+        this.paymentSid = (result as StartCaptureResponse).sid;
         console.log('paymentSid set to:', this.paymentSid);
         console.log('Payment started, paymentSid:', this.paymentSid);
 
@@ -332,4 +383,9 @@ class PaymentClient extends EventTarget {
     }
 }
 
-window.paymentClient = new PaymentClient();
+// Create global instance
+const paymentClient = new PaymentClient();
+(window as any).paymentClient = paymentClient;
+
+// Export for module usage
+export { PaymentClient };

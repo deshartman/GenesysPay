@@ -1,6 +1,8 @@
 # GenesysPay Integration
 
-This project consists of two main components that work together to handle payment processing with Genesys and Twilio integration:
+This project consists of two main components that work together to handle payment processing with Genesys and Twilio integration. The client has been migrated to TypeScript for improved type safety and development experience.
+
+**Latest Changes:** See [CHANGELOG.md](CHANGELOG.md) for version history and migration notes.
 
 ## Server
 
@@ -104,6 +106,7 @@ pnpm start
 
 ## Notes
 
+
 - Ensure all environment variables are properly configured in the Server's `.env` file
 - The Server component must be deployed to Twilio for production use
 - Local development of the Server component requires the Twilio CLI with serverless plugin
@@ -139,11 +142,18 @@ Make sure to update these key variables for production:
 
 ## JSClient
 
-A lightweight HTML/JavaScript client for handling payment processing UI. This is a static client that doesn't require a build process.
+A lightweight HTML/TypeScript client for handling payment processing UI, providing type safety and improved development experience.
 
 ### Setup
 
-The JSClient files are static HTML/JavaScript files located in the `JSClient/src/` directory. No installation or build process is required - the files are automatically copied to the Server's assets directory when starting or deploying the server.
+The JSClient is implemented in TypeScript and located in the `JSClient/src/` directory. The TypeScript files are automatically compiled to JavaScript and copied to the Server's assets directory during server startup or deployment.
+
+#### TypeScript Implementation
+
+- **Type Safety**: Full TypeScript implementation with strict type checking
+- **Twilio Integration**: Uses existing Twilio Sync type definitions without custom interfaces
+- **Modern JavaScript**: Compiled to ES2022 with module support
+- **Event-Driven**: PaymentClient extends EventTarget for clean event handling
 
 ## Phone Call Flow
 

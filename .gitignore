@@ -6,3 +6,4 @@ Server/pnpm-lock.yaml
 Server/.env.dev
 Server/pnpm-lock.yaml
 CLAUDE.local.md
+JSClient/dist/*
