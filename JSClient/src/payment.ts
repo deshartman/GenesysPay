@@ -181,6 +181,9 @@ class PaymentClient extends EventTarget {
             this.dispatchEvent(new CustomEvent('error', { detail: result }));
         } else {
             console.log("API call successful, waiting for sync update...");
+            this.dispatchEvent(new CustomEvent('captureTypeChanged', {
+                detail: { captureType: this.userCaptureOrderArray[0] }
+            }));
         }
     };
 
@@ -247,6 +250,10 @@ class PaymentClient extends EventTarget {
             this.dispatchEvent(new CustomEvent('error', { detail: result }));
             return;
         }
+        
+        this.dispatchEvent(new CustomEvent('captureTypeChanged', {
+            detail: { captureType: this.userCaptureOrderArray[0] }
+        }));
     }
 
     public async resetCvcInput(): Promise<void> {
@@ -268,6 +275,10 @@ class PaymentClient extends EventTarget {
             this.dispatchEvent(new CustomEvent('error', { detail: result }));
             return;
         }
+        
+        this.dispatchEvent(new CustomEvent('captureTypeChanged', {
+            detail: { captureType: this.userCaptureOrderArray[0] }
+        }));
     }
 
     public async resetDateInput(): Promise<void> {
@@ -289,6 +300,10 @@ class PaymentClient extends EventTarget {
             this.dispatchEvent(new CustomEvent('error', { detail: result }));
             return;
         }
+        
+        this.dispatchEvent(new CustomEvent('captureTypeChanged', {
+            detail: { captureType: this.userCaptureOrderArray[0] }
+        }));
     }
 
     public async submit(): Promise<void> {
@@ -371,6 +386,9 @@ class PaymentClient extends EventTarget {
             this.dispatchEvent(new CustomEvent('error', { detail: captureResult }));
         } else {
             console.log('Initial capture API call successful, waiting for sync update...');
+            this.dispatchEvent(new CustomEvent('captureTypeChanged', {
+                detail: { captureType: this.userCaptureOrderArray[0] }
+            }));
         }
     }
 }

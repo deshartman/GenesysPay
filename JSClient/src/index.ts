@@ -44,6 +44,11 @@ class PaymentUI {
         window.paymentClient.addEventListener('paymentCancelled', (event: Event) => {
             console.log('Payment cancelled successfully');
         });
+
+        window.paymentClient.addEventListener('captureTypeChanged', (event: Event) => {
+            const customEvent = event as CustomEvent;
+            this.updateButtonStates(customEvent.detail.captureType);
+        });
     }
 
     private showPaymentView(callSid: string, paymentSid: string): void {
@@ -79,6 +84,42 @@ class PaymentUI {
     public hideError(): void {
         const errorMessage = document.getElementById('errorMessage');
         if (errorMessage) errorMessage.style.display = 'none';
+    }
+
+    private updateButtonStates(captureType: string): void {
+        const resetCardBtn = document.getElementById('resetCardBtn');
+        const resetCvcBtn = document.getElementById('resetCvcBtn');
+        const resetDateBtn = document.getElementById('resetDateBtn');
+
+        // Reset all buttons to outline style
+        if (resetCardBtn) {
+            resetCardBtn.className = 'btn btn-outline-danger';
+        }
+        if (resetCvcBtn) {
+            resetCvcBtn.className = 'btn btn-outline-danger';
+        }
+        if (resetDateBtn) {
+            resetDateBtn.className = 'btn btn-outline-danger';
+        }
+
+        // Set active button to solid style
+        switch (captureType) {
+            case 'payment-card-number':
+                if (resetCardBtn) {
+                    resetCardBtn.className = 'btn btn-danger';
+                }
+                break;
+            case 'security-code':
+                if (resetCvcBtn) {
+                    resetCvcBtn.className = 'btn btn-danger';
+                }
+                break;
+            case 'expiration-date':
+                if (resetDateBtn) {
+                    resetDateBtn.className = 'btn btn-danger';
+                }
+                break;
+        }
     }
 }
 
