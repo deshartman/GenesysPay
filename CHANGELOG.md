@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-07-09
+
+### Fixed
+- Updated deployment script to use correct `twilio serverless:deploy` command instead of `twilio-run deploy`
+- Fixed pnpm workspace deployment error by correcting the deploy command in package.json
+
+### Enhanced
+- Improved visual feedback during payment capture with dynamic color changes as data is entered
+- Enhanced user interface responsiveness during payment field completion
+
 ## [2.0.0] - 2025-07-07
 
 ### Added

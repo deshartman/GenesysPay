@@ -2,6 +2,8 @@
 
 This project consists of two main components that work together to handle payment processing with Genesys and Twilio integration. The client has been migrated to TypeScript for improved type safety and development experience.
 
+**Version 2.1.0** - Latest updates include deployment script fixes and enhanced visual feedback during payment capture.
+
 **Latest Changes:** See [CHANGELOG.md](CHANGELOG.md) for version history and migration notes.
 
 ## Server
@@ -38,7 +40,7 @@ ACCOUNT_SID=your_twilio_account_sid
 AUTH_TOKEN=your_twilio_auth_token
 
 # Server configuration
-SERVER_URL=your_server_url. If this is ngrok, then use the prefix style, e.g., server-SOMENAME.ngrok.io
+SERVER_URL=htpps://your_server_url. If this is ngrok, then use the prefix style, e.g., https://server-SOMENAME.ngrok.io
 
 # Payment configuration
 PAYMENT_CONNECTOR=your_payment_connector
@@ -66,7 +68,7 @@ curl -X POST https://<your-runtime-domain>/sync/setupSyncServices
 
 7. Deploy the serverless functions:
 ```bash
-pnpm deploy
+pnpm run deploy
 ```
 
 **Note:** The server automatically copies JSClient files to the `assets/` directory when starting or deploying. This ensures the latest client files are available through the serverless functions.
@@ -90,7 +92,7 @@ This creates a tunnel from your custom ngrok domain to localhost:3000 where pnpm
 
 2. Update your `.env` file with your ngrok domain:
 ```bash
-SERVER_URL=server.ngrok.dev
+SERVER_URL=https://server.ngrok.dev
 ```
 
 3. Start the server for local development:
@@ -116,7 +118,7 @@ pnpm start
 ### Production Deployment
 
 1. Ensure all environment variables are properly configured in the Server's `.env` file
-2. Update SERVER_URL to your production domain (not ngrok)
+2. Update SERVER_URL to your production domain (not ngrok). Remember to remove/comment out the ngrok domain and include the https:// prefix.
 3. Deploy to Twilio Serverless:
 ```bash
 pnpm deploy
@@ -136,7 +138,7 @@ twilio serverless:deploy
 ### Environment Configuration for Production
 
 Make sure to update these key variables for production:
-- `SERVER_URL`: Your production domain (remove ngrok domain)
+- `SERVER_URL`: Your production domain (e.g., `https://yourdomain.com`)
 - `ACCOUNT_SID` and `AUTH_TOKEN`: Your production Twilio credentials
 - `PAY_SYNC_SERVICE_SID`: The Sync service SID from your production setup
 
