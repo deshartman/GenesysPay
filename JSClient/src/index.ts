@@ -39,15 +39,21 @@ class PaymentUI {
 
         window.paymentClient.addEventListener('paymentSubmitted', (event: Event) => {
             console.log('Payment submitted successfully');
+            this.handlePostSubmission();
         });
 
         window.paymentClient.addEventListener('paymentCancelled', (event: Event) => {
             console.log('Payment cancelled successfully');
+            this.handlePostSubmission();
         });
 
         window.paymentClient.addEventListener('captureTypeChanged', (event: Event) => {
             const customEvent = event as CustomEvent;
             this.updateButtonStates(customEvent.detail.captureType);
+        });
+
+        window.paymentClient.addEventListener('captureComplete', (event: Event) => {
+            this.handleCaptureComplete();
         });
     }
 
@@ -119,6 +125,75 @@ class PaymentUI {
                     resetDateBtn.className = 'btn btn-danger';
                 }
                 break;
+        }
+    }
+
+    private handleCaptureComplete(): void {
+        this.setSubmitButtonActive();
+        this.setResetButtonsInactive();
+    }
+
+    private setSubmitButtonActive(): void {
+        const submitBtn = document.getElementById('submitBtn') as HTMLButtonElement;
+        if (submitBtn) {
+            submitBtn.className = 'btn btn-success px-4';
+            submitBtn.disabled = false;
+        }
+    }
+
+    private setSubmitButtonInactive(): void {
+        const submitBtn = document.getElementById('submitBtn') as HTMLButtonElement;
+        if (submitBtn) {
+            submitBtn.className = 'btn btn-outline-success px-4';
+            submitBtn.disabled = true;
+        }
+    }
+
+    private setResetButtonsInactive(): void {
+        const resetCardBtn = document.getElementById('resetCardBtn') as HTMLButtonElement;
+        const resetCvcBtn = document.getElementById('resetCvcBtn') as HTMLButtonElement;
+        const resetDateBtn = document.getElementById('resetDateBtn') as HTMLButtonElement;
+
+        if (resetCardBtn) {
+            resetCardBtn.className = 'btn btn-outline-danger';
+            resetCardBtn.disabled = true;
+        }
+        if (resetCvcBtn) {
+            resetCvcBtn.className = 'btn btn-outline-danger';
+            resetCvcBtn.disabled = true;
+        }
+        if (resetDateBtn) {
+            resetDateBtn.className = 'btn btn-outline-danger';
+            resetDateBtn.disabled = true;
+        }
+    }
+
+    private setResetButtonsActive(): void {
+        const resetCardBtn = document.getElementById('resetCardBtn') as HTMLButtonElement;
+        const resetCvcBtn = document.getElementById('resetCvcBtn') as HTMLButtonElement;
+        const resetDateBtn = document.getElementById('resetDateBtn') as HTMLButtonElement;
+
+        if (resetCardBtn) {
+            resetCardBtn.disabled = false;
+        }
+        if (resetCvcBtn) {
+            resetCvcBtn.disabled = false;
+        }
+        if (resetDateBtn) {
+            resetDateBtn.disabled = false;
+        }
+    }
+
+    private handlePostSubmission(): void {
+        this.setSubmitButtonInactive();
+        this.setCancelButtonInactive();
+    }
+
+    private setCancelButtonInactive(): void {
+        const cancelBtn = document.getElementById('cancelBtn') as HTMLButtonElement;
+        if (cancelBtn) {
+            cancelBtn.className = 'btn btn-outline-danger px-4';
+            cancelBtn.disabled = true;
         }
     }
 }
