@@ -40,7 +40,7 @@ ACCOUNT_SID=your_twilio_account_sid
 AUTH_TOKEN=your_twilio_auth_token
 
 # Server configuration
-SERVER_URL=htpps://your_server_url. If this is ngrok, then use the prefix style, e.g., https://server-SOMENAME.ngrok.io
+SERVER_URL=https://your_server_url. If this is ngrok, then use the prefix style, e.g., https://server-SOMENAME.ngrok.io
 
 # Payment configuration
 PAYMENT_CONNECTOR=your_payment_connector
@@ -48,7 +48,7 @@ INCLUDE_CVC=true
 INCLUDE_POSTAL_CODE=false
 
 # Sync service configuration
-PAY_SYNC_SERVICE_NAME name of the Sync service
+PAY_SYNC_SERVICE_NAME=name of the Sync service
 PAY_SYNC_SERVICE_SID=your_sync_service_sid  # Set after running setupSyncServices
 
 # Optional SIP configuration
@@ -107,7 +107,6 @@ pnpm start
 - The `pnpm start` command automatically copies JSClient files before starting the local server
 
 ## Notes
-
 
 - Ensure all environment variables are properly configured in the Server's `.env` file
 - The Server component must be deployed to Twilio for production use
