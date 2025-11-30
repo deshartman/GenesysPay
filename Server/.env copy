@@ -1,0 +1,25 @@
+ACCOUNT_SID=
+AUTH_TOKEN=
+
+# Variables for function "pv"
+# ---
+# twilio serverless:deploy --production uses the file .env.prod
+SERVER_URL=
+SIP_DOMAIN_URI=
+
+# Variables for function "aap"
+# ---
+PAYMENT_CONNECTOR=
+INCLUDE_CVC=
+INCLUDE_POSTAL_CODE=false
+PAYMENT_CAPTURE_ORDER="payment-card-number,security-code,expiration-date"
+
+
+# Variables for function "sync"
+# ---
+API_KEY=
+API_SECRET=
+PAY_SYNC_SERVICE_NAME=
+PAY_SYNC_SERVICE_SID=
+SYNC_PAY_MAP_NAME=payMap
+SYNC_UUI_MAP_NAME=uuiMap
