@@ -55,6 +55,17 @@ class PaymentUI {
         window.paymentClient.addEventListener('captureComplete', (event: Event) => {
             this.handleCaptureComplete();
         });
+
+        window.paymentClient.addEventListener('syncStatusChanged', (event: Event) => {
+            const customEvent = event as CustomEvent;
+            this.updateSyncStatus(customEvent.detail);
+        });
+
+        window.paymentClient.addEventListener('syncTimeout', (event: Event) => {
+            const customEvent = event as CustomEvent;
+            this.updateSyncStatus('timeout');
+            this.showError(customEvent.detail.message);
+        });
     }
 
     private showPaymentView(callSid: string, paymentSid: string): void {
@@ -90,6 +101,48 @@ class PaymentUI {
     public hideError(): void {
         const errorMessage = document.getElementById('errorMessage');
         if (errorMessage) errorMessage.style.display = 'none';
+    }
+
+    public updateSyncStatus(status: string): void {
+        const syncStatusEl = document.getElementById('syncStatus');
+        if (!syncStatusEl) return;
+
+        switch (status) {
+            case 'connecting':
+                syncStatusEl.className = 'badge bg-warning';
+                syncStatusEl.textContent = 'Connecting...';
+                break;
+            case 'connected':
+                syncStatusEl.className = 'badge bg-success';
+                syncStatusEl.textContent = 'Connected';
+                break;
+            case 'disconnected':
+                syncStatusEl.className = 'badge bg-danger';
+                syncStatusEl.textContent = 'Disconnected';
+                break;
+            case 'timeout':
+                syncStatusEl.className = 'badge bg-warning';
+                syncStatusEl.textContent = 'No Updates';
+                break;
+        }
+    }
+
+    public setSignInButtonLoading(isLoading: boolean): void {
+        const btn = document.getElementById('signInBtn') as HTMLButtonElement;
+        const text = document.getElementById('signInBtnText');
+        const spinner = document.getElementById('signInBtnSpinner') as HTMLElement;
+
+        if (!btn || !text || !spinner) return;
+
+        if (isLoading) {
+            btn.disabled = true;
+            text.textContent = 'Connecting...';
+            spinner.style.display = 'inline-block';
+        } else {
+            btn.disabled = false;
+            text.textContent = 'Sign in';
+            spinner.style.display = 'none';
+        }
     }
 
     private updateButtonStates(captureType: string): void {
@@ -200,13 +253,28 @@ class PaymentUI {
 
 async function startCapture(): Promise<void> {
     const inputElement = document.getElementById("callSid") as HTMLInputElement;
-    if (inputElement && inputElement.value) {
-        const callSid = inputElement.value;
-        console.log('CallSid value from Input screen:', callSid);
-        await window.paymentClient.startCapture(callSid);
-    } else {
+    if (!inputElement || !inputElement.value) {
         console.error('No CallSid from Input screen');
-        window.paymentUI.showError('Please enter a valid Call SID');
+        window.paymentUI.showError('Please enter a Call SID');
+        return;
+    }
+
+    const callSid = inputElement.value.trim();
+    console.log('CallSid value from Input screen:', callSid);
+
+    // Validate CallSid format
+    if (!callSid.startsWith('CA') || callSid.length !== 34) {
+        window.paymentUI.showError('Invalid Call SID format. Must start with "CA" and be 34 characters long.');
+        return;
+    }
+
+    // Show loading state
+    window.paymentUI.setSignInButtonLoading(true);
+
+    try {
+        await window.paymentClient.startCapture(callSid);
+    } finally {
+        window.paymentUI.setSignInButtonLoading(false);
     }
 }
 

@@ -3,10 +3,14 @@ declare global {
     interface Window {
         Twilio: {
             Sync: {
-                Client: new (token: string) => TwilioSyncClient;
+                Client: new (token: string, options?: TwilioSyncClientOptions) => TwilioSyncClient;
             };
         };
     }
+}
+
+interface TwilioSyncClientOptions {
+    logLevel?: 'silent' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
 }
 
 interface TwilioSyncClient {
@@ -80,6 +84,11 @@ class PaymentClient extends EventTarget {
     private required: string | string[] = [];
     private partialResult: string | null = null;
 
+    // Timeout monitoring
+    private syncUpdateTimeout: NodeJS.Timeout | null = null;
+    private lastSyncUpdate: number = 0;
+    private SYNC_TIMEOUT_MS: number = 15000; // 15 seconds
+
     constructor(
         userCaptureOrderArray: CaptureType[] = ['payment-card-number', 'security-code', 'expiration-date'],
         chargeAmount: number = 0,
@@ -114,15 +123,19 @@ class PaymentClient extends EventTarget {
     }
 
     public progressCapture = async (): Promise<void> => {
+        const timestamp = new Date().toISOString();
+
+        console.log(`[${timestamp}] --- progressCapture called ---`);
+
         // Early return: Only proceed if capture has been started
         if (!this.startedCapturing) {
-            console.log("capture not started yet, skipping");
+            console.log(`[${timestamp}] ⊘ Capture not started yet, skipping`);
             return;
         }
 
         // Early return: Wait for sync data if Required is not yet available
         if (!this.capture) {
-            console.log("not in capture mode, skipping");
+            console.log(`[${timestamp}] ⊘ Not in capture mode yet, skipping`);
             return;
         }
 
@@ -135,23 +148,25 @@ class PaymentClient extends EventTarget {
             requiredArray = [];
         }
 
-        console.log("requiredArray: ", requiredArray);
-        console.log("userCaptureOrderArray: ", this.userCaptureOrderArray);
+        console.log(`[${timestamp}] Required fields: [${requiredArray.join(', ')}]`);
+        console.log(`[${timestamp}] Capture order: [${this.userCaptureOrderArray.join(', ')}]`);
 
         const currentCaptureType = this.userCaptureOrderArray[0];
-        console.log("currentCaptureType: ", currentCaptureType);
+        console.log(`[${timestamp}] Current capture type: ${currentCaptureType}`);
 
         // Check if current capture type is still required
         if (requiredArray.includes(currentCaptureType)) {
-            console.log(`continuing to capture ${currentCaptureType}`);
+            console.log(`[${timestamp}] ⟳ Still capturing ${currentCaptureType}, no change needed`);
             return;
         }
 
-        console.log(`${currentCaptureType} no longer required, progressing`);
+        console.log(`[${timestamp}] ✓ ${currentCaptureType} completed, progressing to next field`);
 
         // Early return: Complete capture if no more required fields
         if (requiredArray.length === 0) {
-            console.log("all fields captured, stopping capture");
+            console.log(`[${timestamp}] ========================================`);
+            console.log(`[${timestamp}] ✓✓✓ ALL FIELDS CAPTURED SUCCESSFULLY ✓✓✓`);
+            console.log(`[${timestamp}] ========================================`);
             this.canSubmit = true;
             this.dispatchEvent(new CustomEvent('captureComplete', {
                 detail: { message: 'All payment fields captured successfully' }
@@ -161,31 +176,64 @@ class PaymentClient extends EventTarget {
 
         // Progress to next capture type
         this.userCaptureOrderArray.shift();
-        console.log("userCaptureOrderArray after shift: ", this.userCaptureOrderArray);
+        console.log(`[${timestamp}] Removed ${currentCaptureType} from capture order`);
+        console.log(`[${timestamp}] Remaining capture order: [${this.userCaptureOrderArray.join(', ')}]`);
 
         // Early return: No more items to capture
         if (this.userCaptureOrderArray.length === 0) {
-            console.log("no more items in capture order");
+            console.log(`[${timestamp}] ⊘ No more items in capture order`);
             return;
         }
 
-        console.log(`Calling API to change capture to: ${this.userCaptureOrderArray[0]}`);
+        const nextCaptureType = this.userCaptureOrderArray[0];
+        console.log(`[${timestamp}] → Changing capture to: ${nextCaptureType}`);
+        console.log(`[${timestamp}] Calling changeCapture API...`);
+
         const { success, result } = await this.callAPI('/aap/changeCapture', {
             callSid: this.callSid,
             paymentSid: this.paymentSid,
-            captureType: this.userCaptureOrderArray[0]
+            captureType: nextCaptureType
         });
 
         if (!success) {
-            console.log("API call failed:", result);
+            console.error(`[${timestamp}] ✗ FAILED: changeCapture API call failed`);
+            console.error(`[${timestamp}] Error: ${result}`);
             this.dispatchEvent(new CustomEvent('error', { detail: result }));
         } else {
-            console.log("API call successful, waiting for sync update...");
+            console.log(`[${timestamp}] ✓ SUCCESS: changeCapture API call succeeded`);
+            console.log(`[${timestamp}] Now capturing: ${nextCaptureType}`);
             this.dispatchEvent(new CustomEvent('captureTypeChanged', {
-                detail: { captureType: this.userCaptureOrderArray[0] }
+                detail: { captureType: nextCaptureType }
             }));
         }
     };
+
+    private startSyncTimeoutMonitor(): void {
+        this.lastSyncUpdate = Date.now();
+
+        this.syncUpdateTimeout = setInterval(() => {
+            const timeSinceLastUpdate = Date.now() - this.lastSyncUpdate;
+
+            if (timeSinceLastUpdate > this.SYNC_TIMEOUT_MS) {
+                this.dispatchEvent(new CustomEvent('syncTimeout', {
+                    detail: {
+                        message: 'No updates received from payment session. Please verify the Call SID is for an active call.',
+                        secondsSinceUpdate: Math.floor(timeSinceLastUpdate / 1000)
+                    }
+                }));
+
+                // Stop monitoring after warning
+                this.stopSyncTimeoutMonitor();
+            }
+        }, 5000); // Check every 5 seconds
+    }
+
+    private stopSyncTimeoutMonitor(): void {
+        if (this.syncUpdateTimeout) {
+            clearInterval(this.syncUpdateTimeout);
+            this.syncUpdateTimeout = null;
+        }
+    }
 
     private async initializeSyncClient(): Promise<void> {
         const { success, result } = await this.callAPI("/sync/getSyncToken", {
@@ -201,13 +249,26 @@ class PaymentClient extends EventTarget {
         const jwtToken = result;
         console.log('JWT Token received:', jwtToken);
 
-        this.syncClient = new window.Twilio.Sync.Client(jwtToken);
+        this.dispatchEvent(new CustomEvent('syncStatusChanged', { detail: 'connecting' }));
+
+        this.syncClient = new window.Twilio.Sync.Client(jwtToken, { logLevel: 'debug' });
         this.payMap = await this.syncClient.map('payMap');
         console.log(`Client payMap created: ${this.payMap.sid}`);
 
+        this.dispatchEvent(new CustomEvent('syncStatusChanged', { detail: 'connected' }));
+
         this.payMap.on('itemUpdated', (args: SyncMapEventArgs) => {
-            console.log("Item updated in payMap:", args.item.key);
-            console.log("Updated item data:", args.item.data);
+            const timestamp = new Date().toISOString();
+
+            console.log(`[${timestamp}] ========================================`);
+            console.log(`[${timestamp}] CLIENT: SYNC UPDATE RECEIVED`);
+            console.log(`[${timestamp}] ========================================`);
+
+            this.lastSyncUpdate = Date.now(); // Reset timeout
+
+            console.log(`[${timestamp}] Map Item Key: ${args.item.key}`);
+            console.log(`[${timestamp}] Is Local Update: ${args.isLocal}`);
+            console.log(`[${timestamp}] Full Item Data: ${JSON.stringify(args.item.data, null, 2)}`);
 
             // Store complete data object
             this.maskedPayData = args.item.data as PaymentSyncData;
@@ -217,17 +278,34 @@ class PaymentClient extends EventTarget {
             this.partialResult = this.maskedPayData.PartialResult || null;
             this.required = this.maskedPayData.Required ? this.maskedPayData.Required.split(',').map(s => s.trim()) : [];
 
-            console.log("Required: ", this.required);
-            console.log("PartialResult: ", this.partialResult);
-            console.log("Capture: ", this.capture);
+            console.log(`[${timestamp}] Extracted State Variables:`);
+            console.log(`[${timestamp}] - Capture: ${this.capture}`);
+            console.log(`[${timestamp}] - PartialResult: ${this.partialResult}`);
+            console.log(`[${timestamp}] - Required: [${this.required.join(', ')}]`);
 
+            // Log masked payment data
+            if (this.maskedPayData.PaymentCardNumber) {
+                console.log(`[${timestamp}] - PaymentCardNumber: ${this.maskedPayData.PaymentCardNumber}`);
+            }
+            if (this.maskedPayData.SecurityCode) {
+                console.log(`[${timestamp}] - SecurityCode: ${this.maskedPayData.SecurityCode}`);
+            }
+            if (this.maskedPayData.ExpirationDate) {
+                console.log(`[${timestamp}] - ExpirationDate: ${this.maskedPayData.ExpirationDate}`);
+            }
+
+            console.log(`[${timestamp}] Dispatching paymentDataUpdated event...`);
             this.dispatchEvent(new CustomEvent('paymentDataUpdated', {
                 detail: this.maskedPayData
             }));
 
             // Check progress after data update - CRITICAL
-            console.log("Calling progressCapture after sync update");
+            console.log(`[${timestamp}] Calling progressCapture to check next step...`);
             this.progressCapture();
+
+            console.log(`[${timestamp}] ========================================`);
+            console.log(`[${timestamp}] CLIENT: SYNC UPDATE PROCESSED`);
+            console.log(`[${timestamp}] ========================================`);
         });
     }
 
@@ -339,13 +417,22 @@ class PaymentClient extends EventTarget {
     }
 
     public async startCapture(inputCallSid: string): Promise<void> {
+        const timestamp = new Date().toISOString();
+
+        console.log(`[${timestamp}] ========================================`);
+        console.log(`[${timestamp}] CLIENT: START CAPTURE INITIATED`);
+        console.log(`[${timestamp}] ========================================`);
+
         this.callSid = inputCallSid;
-        console.log('CallSid value set to:', this.callSid);
+        console.log(`[${timestamp}] CallSid: ${this.callSid}`);
+        console.log(`[${timestamp}] Charge Amount: ${this.chargeAmount}`);
+        console.log(`[${timestamp}] Currency: ${this.currency}`);
 
         // Reset capture order from template
         this.userCaptureOrderArray = this.userCaptureOrderTemplate.slice();
-        console.log('Reset capture order to:', this.userCaptureOrderArray);
+        console.log(`[${timestamp}] Capture order: ${this.userCaptureOrderArray.join(' → ')}`);
 
+        console.log(`[${timestamp}] Calling startCapture API...`);
         const { success, result } = await this.callAPI('/aap/startCapture', {
             callSid: this.callSid,
             chargeAmount: this.chargeAmount,
@@ -353,14 +440,25 @@ class PaymentClient extends EventTarget {
         });
 
         if (!success) {
-            this.dispatchEvent(new CustomEvent('error', { detail: result }));
+            console.error(`[${timestamp}] ✗ FAILED: startCapture API call failed`);
+            console.error(`[${timestamp}] Error: ${JSON.stringify(result)}`);
+
+            // Parse and enhance error message
+            let errorMessage = typeof result === 'string' ? result : 'Failed to start payment capture';
+
+            if (errorMessage.includes('Invalid Call SID')) {
+                errorMessage += '\n\nTip: Make sure you copied the complete Call SID (34 characters starting with "CA") and the call is still active.';
+            }
+
+            this.dispatchEvent(new CustomEvent('error', { detail: errorMessage }));
             return;
         }
 
-        console.log('responseData:', result);
+        console.log(`[${timestamp}] ✓ SUCCESS: startCapture API call succeeded`);
+        console.log(`[${timestamp}] Response: ${JSON.stringify(result, null, 2)}`);
+
         this.paymentSid = (result as StartCaptureResponse).sid;
-        console.log('paymentSid set to:', this.paymentSid);
-        console.log('Payment started, paymentSid:', this.paymentSid);
+        console.log(`[${timestamp}] PaymentSid: ${this.paymentSid}`);
 
         this.dispatchEvent(new CustomEvent('captureStarted', {
             detail: {
@@ -369,27 +467,42 @@ class PaymentClient extends EventTarget {
             }
         }));
 
+        console.log(`[${timestamp}] Initializing Sync client...`);
         await this.initializeSyncClient();
         this.startedCapturing = true;
-        console.log('Capture started, waiting for sync updates...');
+        console.log(`[${timestamp}] ✓ Sync client initialized, ready for updates`);
 
         // Automatically start the first capture step
-        console.log('Starting first capture step:', this.userCaptureOrderArray[0]);
+        const firstCaptureType = this.userCaptureOrderArray[0];
+        console.log(`[${timestamp}] Starting first capture step: ${firstCaptureType}`);
+        console.log(`[${timestamp}] Calling changeCapture API...`);
+
         const { success: captureSuccess, result: captureResult } = await this.callAPI('/aap/changeCapture', {
             callSid: this.callSid,
             paymentSid: this.paymentSid,
-            captureType: this.userCaptureOrderArray[0]
+            captureType: firstCaptureType
         });
 
         if (!captureSuccess) {
-            console.log('Initial capture API call failed:', captureResult);
+            console.error(`[${timestamp}] ✗ FAILED: Initial changeCapture API call failed`);
+            console.error(`[${timestamp}] Error: ${captureResult}`);
             this.dispatchEvent(new CustomEvent('error', { detail: captureResult }));
         } else {
-            console.log('Initial capture API call successful, waiting for sync update...');
+            console.log(`[${timestamp}] ✓ SUCCESS: Initial changeCapture API call succeeded`);
+            console.log(`[${timestamp}] Now capturing: ${firstCaptureType}`);
+            console.log(`[${timestamp}] Waiting for Sync updates from server...`);
             this.dispatchEvent(new CustomEvent('captureTypeChanged', {
-                detail: { captureType: this.userCaptureOrderArray[0] }
+                detail: { captureType: firstCaptureType }
             }));
         }
+
+        // Start monitoring for sync updates
+        console.log(`[${timestamp}] Starting Sync timeout monitor (${this.SYNC_TIMEOUT_MS}ms)`);
+        this.startSyncTimeoutMonitor();
+
+        console.log(`[${timestamp}] ========================================`);
+        console.log(`[${timestamp}] CLIENT: START CAPTURE COMPLETE`);
+        console.log(`[${timestamp}] ========================================`);
     }
 }
 

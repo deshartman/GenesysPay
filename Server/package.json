@@ -6,7 +6,7 @@
   "source": "assets/payment.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build-ts": "cd ../JSClient && npx tsc",
+    "build-ts": "npx tsc -p ../JSClient",
     "copy-assets": "cp -r ../JSClient/src/*.html assets/ && cp -r ../JSClient/src/img assets/ && cp -r ../JSClient/dist/* assets/",
     "build": "npm run build-ts && npm run copy-assets",
     "start": "npm run build && twilio-run",
@@ -14,13 +14,13 @@
   },
   "dependencies": {
     "@twilio/runtime-handler": "2.0.1",
-    "twilio": "^5.7.2",
-    "twilio-sync": "^3.3.3"
+    "twilio": "^5.10.6",
+    "twilio-sync": "^3.3.10"
   },
   "devDependencies": {
+    "@types/node": "^20.19.25",
     "twilio-run": "^4.2.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18"

@@ -17,11 +17,17 @@
         <h1 class="h3 mb-3 fw-normal text-center">Twilio Agent Assisted Demo</h1>
 
         <div class="form-floating mb-3">
-            <input type="text" class="form-control" id="callSid" placeholder="CAxxxxxxxxxxxxx">
+            <input type="text" class="form-control" id="callSid" placeholder="CAxxxxxxxxxxxxx" maxlength="34">
             <label for="callSid">Paste an active call SID here</label>
         </div>
+        <div id="callSidValidation" class="text-muted small mb-3" style="display: none;">
+            ✓ Valid Call SID format
+        </div>
 
-        <button class="btn btn-primary w-100 py-2" type="submit">Sign in</button>
+        <button class="btn btn-primary w-100 py-2" id="signInBtn" type="submit">
+            <span id="signInBtnText">Sign in</span>
+            <span id="signInBtnSpinner" class="spinner-border spinner-border-sm ms-2" style="display: none;"></span>
+        </button>
     </form>
     
     <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;">
@@ -49,6 +55,10 @@
                 <div class="d-flex align-items-center gap-2">
                     <span class="text-secondary">Payment ID:</span>
                     <span class="badge bg-light text-dark" id="paymentSidDisplay"></span>
+                </div>
+                <div class="d-flex align-items-center gap-2 mt-2">
+                    <span class="text-secondary">Status:</span>
+                    <span class="badge bg-secondary" id="syncStatus">Disconnected</span>
                 </div>
             </div>
             
