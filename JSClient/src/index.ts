@@ -55,17 +55,6 @@ class PaymentUI {
         window.paymentClient.addEventListener('captureComplete', (event: Event) => {
             this.handleCaptureComplete();
         });
-
-        window.paymentClient.addEventListener('syncStatusChanged', (event: Event) => {
-            const customEvent = event as CustomEvent;
-            this.updateSyncStatus(customEvent.detail);
-        });
-
-        window.paymentClient.addEventListener('syncTimeout', (event: Event) => {
-            const customEvent = event as CustomEvent;
-            this.updateSyncStatus('timeout');
-            this.showError(customEvent.detail.message);
-        });
     }
 
     private showPaymentView(callSid: string, paymentSid: string): void {
@@ -101,30 +90,6 @@ class PaymentUI {
     public hideError(): void {
         const errorMessage = document.getElementById('errorMessage');
         if (errorMessage) errorMessage.style.display = 'none';
-    }
-
-    public updateSyncStatus(status: string): void {
-        const syncStatusEl = document.getElementById('syncStatus');
-        if (!syncStatusEl) return;
-
-        switch (status) {
-            case 'connecting':
-                syncStatusEl.className = 'badge bg-warning';
-                syncStatusEl.textContent = 'Connecting...';
-                break;
-            case 'connected':
-                syncStatusEl.className = 'badge bg-success';
-                syncStatusEl.textContent = 'Connected';
-                break;
-            case 'disconnected':
-                syncStatusEl.className = 'badge bg-danger';
-                syncStatusEl.textContent = 'Disconnected';
-                break;
-            case 'timeout':
-                syncStatusEl.className = 'badge bg-warning';
-                syncStatusEl.textContent = 'No Updates';
-                break;
-        }
     }
 
     public setSignInButtonLoading(isLoading: boolean): void {

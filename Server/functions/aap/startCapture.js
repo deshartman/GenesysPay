@@ -16,18 +16,6 @@ exports.handler = async (context, event, callback) => {
   // Get a reference to the Twilio REST helper library
   const twilioClient = context.getTwilioClient();
 
-  // Enhanced logging setup
-  const timestamp = new Date().toISOString();
-  const callSid = event.callSid;
-
-  console.log(`[${timestamp}] === START CAPTURE REQUESTED ===`);
-  console.log(`[${timestamp}] CallSid: ${callSid}`);
-  console.log(`[${timestamp}] Request Parameters:`);
-  console.log(`[${timestamp}] - Charge Amount: ${event.chargeAmount}`);
-  console.log(`[${timestamp}] - Currency: ${event.currency}`);
-  console.log(`[${timestamp}] - Token Type: ${event.tokenType || 'N/A'}`);
-  console.log(`[${timestamp}] - Payment Connector: ${context.PAYMENT_CONNECTOR}`);
-
   // Create the payment session
   const sessionData = {
     idempotencyKey: event.callSid + Date.now().toString(),
@@ -41,8 +29,7 @@ exports.handler = async (context, event, callback) => {
     postalCode: context.INCLUDE_POSTAL_CODE
   }
 
-  console.log(`[${timestamp}] Creating payment session...`);
-  console.log(`[${timestamp}] Session Config: ${JSON.stringify(sessionData, null, 2)}`);
+  console.log(`Starting payment session for callSID: ${event.callSid} with data: ${JSON.stringify(sessionData)}`);
 
   // Now create the payment session
   try {
@@ -50,29 +37,15 @@ exports.handler = async (context, event, callback) => {
       .payments
       .create(sessionData);
 
-    console.log(`[${timestamp}] ✓ SUCCESS: Payment session created`);
-    console.log(`[${timestamp}] PaymentSid: ${paymentSession.sid}`);
-    console.log(`[${timestamp}] CallSid: ${callSid}`);
-    console.log(`[${timestamp}] Status: ${paymentSession.status}`);
-    console.log(`[${timestamp}] Payment Method: ${paymentSession.paymentMethod}`);
-    console.log(`[${timestamp}] Status Callback: ${sessionData.statusCallback}`);
-    console.log(`[${timestamp}] Full Response: ${JSON.stringify(paymentSession, null, 2)}`);
-    console.log(`[${timestamp}] === START CAPTURE COMPLETE ===`);
+    console.log(`Payment session created for callSID: ${event.callSid} with session data: ${JSON.stringify(paymentSession)}`);
 
     twilioResponse.setBody(paymentSession);
     return callback(null, twilioResponse);
   } catch (error) {
-    console.error(`[${timestamp}] ✗ FAILED: Error starting payment session`);
-    console.error(`[${timestamp}] CallSid: ${callSid}`);
-    console.error(`[${timestamp}] Error Message: ${error.message}`);
-    console.error(`[${timestamp}] Error Code: ${error.code || 'N/A'}`);
-    console.error(`[${timestamp}] More Info: ${error.moreInfo || 'N/A'}`);
-    console.error(`[${timestamp}] Full Error: ${JSON.stringify(error, null, 2)}`);
-    console.error(`[${timestamp}] === START CAPTURE FAILED ===`);
-
+    console.error(`Error starting payment session for callSID: ${event.callSid} - ${error}`);
     twilioResponse.setStatusCode(400);
     twilioResponse.setBody({
-      error: `Unable to start payment for Call SID ${event.callSid}. Please verify: (1) The call is currently active, (2) The Call SID is correct, (3) The call has not already completed. Error: ${error.message}`
+      error: `Invalid Call SID: ${event.callSid}. Please check that the call is active.`
     });
     return callback(null, twilioResponse);
   }

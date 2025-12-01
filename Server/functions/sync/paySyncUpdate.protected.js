@@ -48,31 +48,7 @@ exports.handler = async (context, event, callback) => {
     // Delete the HTTP headers
     delete event.request;
 
-    // Enhanced logging setup
-    const timestamp = new Date().toISOString();
-    const callSid = event.CallSid;
-    const paymentSid = event.Sid;
-
-    // Determine event type based on what fields are present
-    let eventType = 'UNKNOWN';
-    if (event.PaymentConnector && !event.PaymentCardNumber) {
-      eventType = 'PAYMENT_INITIATED';
-    } else if (event.PaymentCardNumber) {
-      eventType = 'CAPTURE_UPDATE';
-    } else if (event.Result) {
-      eventType = 'PAYMENT_RESULT';
-    }
-
-    console.log(`[${timestamp}] === SYNC UPDATE RECEIVED ===`);
-    console.log(`[${timestamp}] CallSid: ${callSid}`);
-    console.log(`[${timestamp}] PaymentSid: ${paymentSid}`);
-    console.log(`[${timestamp}] Event Type: ${eventType}`);
-    console.log(`[${timestamp}] Full Event Data: ${JSON.stringify(event, null, 2)}`);
-
-    console.log(`[${timestamp}] Attempting to UPDATE existing Sync Map item...`);
-    console.log(`[${timestamp}] - Service: ${context.PAY_SYNC_SERVICE_SID}`);
-    console.log(`[${timestamp}] - Map: ${context.SYNC_PAY_MAP_NAME}`);
-    console.log(`[${timestamp}] - Key: ${paymentSid}`);
+    console.log(`Updating Pay Map: ${event.Sid} with data: ${JSON.stringify(event)}`);
 
     await restClient.sync.v1.services(context.PAY_SYNC_SERVICE_SID)
       .syncMaps(context.SYNC_PAY_MAP_NAME)
@@ -81,16 +57,8 @@ exports.handler = async (context, event, callback) => {
         data: event
       });
 
-    console.log(`[${timestamp}] ✓ SUCCESS: Updated Sync Map item ${paymentSid} for CallSid ${callSid}`);
-    console.log(`[${timestamp}] === SYNC UPDATE COMPLETE ===`);
     return callback(null, event.Sid);
   } catch (error) {
-    // Need to re-declare these since they're in try block scope
-    const timestamp = new Date().toISOString();
-    const callSid = event.CallSid;
-    const paymentSid = event.Sid;
-
-    console.log(`[${timestamp}] Map item doesn't exist yet, creating new item...`);
     try {
       await restClient.sync.v1.services(context.PAY_SYNC_SERVICE_SID)
         .syncMaps(context.SYNC_PAY_MAP_NAME)
@@ -100,14 +68,8 @@ exports.handler = async (context, event, callback) => {
           data: event,
           ttl: 43200  // 12 hours
         });
-      console.log(`[${timestamp}] ✓ SUCCESS: Created new Sync Map item ${paymentSid} for CallSid ${callSid}`);
-      console.log(`[${timestamp}] Created with TTL: 43200 seconds (12 hours)`);
-      console.log(`[${timestamp}] === SYNC UPDATE COMPLETE ===`);
       return callback(null, event.Sid);
     } catch (error) {
-      console.error(`[${timestamp}] ✗ FAILED: Error creating Sync Map item for CallSid ${callSid}, PaymentSid ${paymentSid}`);
-      console.error(`[${timestamp}] Error details: ${error.message}`);
-      console.error(`[${timestamp}] Full error: ${JSON.stringify(error, null, 2)}`);
       return callback(`Error creating Pay Map: ${error}`);
     }
 
