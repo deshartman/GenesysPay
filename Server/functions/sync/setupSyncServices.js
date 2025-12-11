@@ -17,7 +17,11 @@ exports.handler = async (context, event, callback) => {
   twilioResponse.appendHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   twilioResponse.appendHeader("Content-Type", "application/json");
 
-  const restClient = context.getTwilioClient();
+  // Create a Twilio client explicitly configured for us1 region
+  // Sync is only available in us1, regardless of where Functions are deployed
+  const restClient = require('twilio')(context.ACCOUNT_SID, context.AUTH_TOKEN, {
+    region: 'us1'
+  });
 
   try {
     // Create the Sync Service. NOTE: This creates a new service even with the same friendly name, so make sure you use a unique name. The SID will be different.

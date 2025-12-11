@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2025-12-11
+
+### Fixed
+- Fixed Twilio Sync compatibility for deployments in non-us1 regions (au1, ie1, etc.)
+- Resolved `getaddrinfo ENOTFOUND sync.sydney.au1.twilio.com` error when deploying to au1 region
+- Updated Sync client initialization to explicitly use us1 region regardless of Function deployment region
+
+### Changed
+- Updated `uuiSyncUpdate.js` to create Twilio client with explicit us1 region configuration
+- Updated `paySyncUpdate.protected.js` to create Twilio client with explicit us1 region configuration
+- Updated `setupSyncServices.js` to create Twilio client with explicit us1 region configuration
+- Enhanced README.md with documentation about Sync region requirements and troubleshooting
+
+### Technical Details
+- Twilio Sync is only available in the us1 region
+- All Sync API calls now use `require('twilio')(accountSid, authToken, { region: 'us1' })` instead of `context.getTwilioClient()`
+- This allows Functions to be deployed to any region while maintaining Sync functionality
+- No changes required to environment variables or configuration
+
 ## [2.1.0] - 2025-07-09
 
 ### Fixed

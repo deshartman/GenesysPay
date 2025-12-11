@@ -1,28 +1,29 @@
 /**
- * This is the inbound call from PSTN that routes the call to the Customer destination SIP Domain.
- * 
+ * This is the inbound call from PSTN that routes the call to the Customer destination SIP Domain WITH REFER SUPPORT.
+ *
+ * Same as callToSIP.js but with answerOnBridge and referUrl for warm transfer capability.
+ *
  * The PSTN side call SID is written into a Sync Map as reference, so Pay can be attached.
- * 
+ *
  * Process:
  * 1) Assume uuiMap exists and create new mapItem with inbound call Sid as key and uui.
  * 2) If it fails, SyncMap uuiMap does not exist, so create it and add new data.
- * 3) Finally, create new call leg.
- * 
+ * 3) Finally, create new call leg with REFER support enabled.
+ *
  *  This can also be done using Twiml:
- * 
+ *
  * <Response>
- *    <Dial>
+ *    <Dial answerOnBridge="true" referUrl="/pv/callTransfer" referMethod="POST">
  *      <Sip
-        statusCallbackEvent: 'answered',
-        statusCallback: `/sync/uuiSyncUpdate?CallDirection=toSIP&UUI={{CallSid}}`,
-        statusCallbackMethod: 'POST'>
+ *        statusCallbackEvent: 'answered',
+ *        statusCallback: `/sync/uuiSyncUpdate?CallDirection=toSIP&UUI={{CallSid}}`,
+ *        statusCallbackMethod: 'POST'>
  *       sip:{{To}}@{{SIP_DOMAIN_URI}}?User-to-User={{CallSid}}
  *      </Sip>
  *    </Dial>
  * </Response>
- * 
-
- * 
+ *
+ *
  */
 exports.handler = async (context, event, callback) => {
 
@@ -32,10 +33,14 @@ exports.handler = async (context, event, callback) => {
 
   try {
     const sipTo = `${event.To}@${context.SIP_DOMAIN_URI}?User-to-User=${UUI}`;
-    console.info(`callToSIP: Calling SIP URI: ${sipTo} for Call SID: ${event.CallSid} and UUI: ${UUI}`)
+    // console.info(`callToSIPwithRefer: Calling SIP URI: ${sipTo} for Call SID: ${event.CallSid} and UUI: ${UUI}`)
 
-    // Dial SIP URL
-    voiceResponse.dial().sip(
+    // Dial SIP URL with REFER support for warm transfers
+    voiceResponse.dial({
+      answerOnBridge: true,        // Keep caller connected during transfer (warm transfer)
+      referUrl: '/pv/callTransfer', // Webhook for REFER handling
+      referMethod: 'POST'
+    }).sip(
       {
         // Only update Sync when call is answered
         statusCallbackEvent: 'answered',
@@ -46,6 +51,6 @@ exports.handler = async (context, event, callback) => {
 
     return callback(null, voiceResponse);
   } catch (error) {
-    return callback(`Error with callToSIP: ${error}`);
+    return callback(`Error with callToSIPwithRefer: ${error}`);
   }
 };

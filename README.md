@@ -28,12 +28,16 @@ npm install -g @twilio/cli
 twilio plugins:install @twilio-labs/plugin-serverless
 ```
 
-4. Create a `.env` file based on `.env copy`:
+4. Create environment files based on `.env.example`:
 ```bash
-cp '.env copy' .env
+# For development
+cp .env.example .env.dev
+
+# For production
+cp .env.example .env.prod
 ```
 
-5. Configure the following environment variables in `.env`:
+5. Configure the following environment variables in `.env.dev` (for local development) and `.env.prod` (for production):
 ```
 # Required Twilio credentials
 ACCOUNT_SID=your_twilio_account_sid
@@ -48,6 +52,9 @@ INCLUDE_CVC=true
 INCLUDE_POSTAL_CODE=false
 
 # Sync service configuration
+# NOTE: Twilio Sync is only available in the us1 region. The code automatically
+# configures Sync API calls to use us1, regardless of where your Functions are deployed.
+# This allows deployment to au1, ie1, or other regions while still using Sync.
 PAY_SYNC_SERVICE_NAME name of the Sync service
 PAY_SYNC_SERVICE_SID=your_sync_service_sid  # Set after running setupSyncServices
 
@@ -65,10 +72,10 @@ PAY_SYNC_SERVICE_SID=your_sync_service_sid  # Set after running setupSyncService
 
 6. Set up the Sync service (one-time setup):
 ```bash
-# 1. Uncomment PAY_SYNC_SERVICE_NAME in .env and set a unique name
+# 1. Ensure PAY_SYNC_SERVICE_NAME is set in your .env.dev file
 # 2. Run the setup endpoint:
 curl -X POST https://<your-runtime-domain>/sync/setupSyncServices
-# 3. Copy the returned service SID to PAY_SYNC_SERVICE_SID in .env
+# 3. Copy the returned service SID to PAY_SYNC_SERVICE_SID in both .env.dev and .env.prod
 ```
 
 7. Deploy the serverless functions:
@@ -102,7 +109,7 @@ ngrok http --domain server.ngrok.dev 3000
 ```
 This creates a tunnel from your custom ngrok domain to localhost:3000 where pnpm start will run.
 
-2. Update your `.env` file with your ngrok domain:
+2. Update your `.env.dev` file with your ngrok domain:
 ```bash
 SERVER_URL=https://server.ngrok.dev
 ```
@@ -112,6 +119,12 @@ SERVER_URL=https://server.ngrok.dev
 pnpm start
 ```
 
+**Environment Configuration**:
+- Local development automatically uses `.env.dev` (configured in `.twilioserverlessrc`)
+- The `.twilioserverlessrc` file maps the `dev` environment to `.env.dev`
+- Use `--environment dev` flag if needed: `twilio serverless:start --environment dev`
+- Keep your development credentials and ngrok URL in `.env.dev`
+
 ### Access the Application
 
 - JSClient files are served from the Server's assets directory
@@ -120,10 +133,11 @@ pnpm start
 
 ## Notes
 
-
-- Ensure all environment variables are properly configured in the Server's `.env` file
+- Ensure all environment variables are properly configured in `.env.dev` for development and `.env.prod` for production
+- The project uses `.twilioserverlessrc` to automatically select the correct environment file
 - The Server component must be deployed to Twilio for production use
 - Local development of the Server component requires the Twilio CLI with serverless plugin
+- Never commit `.env.dev` or `.env.prod` to version control - only `.env.example` should be tracked
 
 ## Twilio Console Configuration
 
@@ -142,7 +156,7 @@ Both routing types use User-to-User Information (UUI) headers to track calls and
 
 Before configuring the Twilio Console, ensure:
 - Your serverless functions are deployed and accessible
-- You have your SERVER_URL available (from your .env file)
+- You have your SERVER_URL available (from `.env.dev` for development or `.env.prod` for production)
 - You have a Twilio phone number (for inbound calls)
 - You have configured your SIP_DOMAIN_URI (for SIP routing)
 
@@ -303,6 +317,13 @@ After configuration, verify your setup:
 - Verify SIP_DOMAIN_URI is configured in .env
 - Review Function logs for error messages
 
+**Issue: Sync errors in non-us1 regions (au1, ie1, etc.)**
+- **Symptom**: Errors like `getaddrinfo ENOTFOUND sync.sydney.au1.twilio.com`
+- **Cause**: Twilio Sync is only available in the us1 region
+- **Solution**: The code has been updated to automatically use us1 for Sync operations regardless of deployment region
+- **Affected Files**: `uuiSyncUpdate.js`, `paySyncUpdate.protected.js`, `setupSyncServices.js`
+- **No Action Required**: If you have the latest version, Sync will work correctly in any region
+
 **Issue: UUI not mapping**
 - Verify status callbacks are reaching `/sync/uuiSyncUpdate`
 - Check PAY_SYNC_SERVICE_SID is configured correctly
@@ -341,30 +362,46 @@ After configuration, verify your setup:
 
 ### Production Deployment
 
-1. Ensure all environment variables are properly configured in the Server's `.env` file
-2. Update SERVER_URL to your production domain (not ngrok). Remember to remove/comment out the ngrok domain and include the https:// prefix.
+1. Ensure all environment variables are properly configured in the Server's `.env.prod` file
+2. Update SERVER_URL in `.env.prod` to your production domain (not ngrok). Remember to include the https:// prefix.
 3. Deploy to Twilio Serverless:
 ```bash
 pnpm deploy
 ```
 
+**Environment Configuration**:
+- Production deployment automatically uses `.env.prod` (configured in `.twilioserverlessrc`)
+- The `.twilioserverlessrc` file maps production (default/wildcard) to `.env.prod`
+- To explicitly deploy with production environment: `twilio serverless:deploy --production`
+- Keep your production credentials in `.env.prod`, never commit this file to git
+
 The deployment process will:
+- Use environment variables from `.env.prod`
 - Copy JSClient files to the assets directory
 - Deploy all serverless functions to Twilio
 - Make your application available at your Twilio Runtime domain
 
-**Note:** If you prefer to use the Twilio CLI directly with `twilio serverless:deploy`, remember to first copy JSClient files to the assets directory:
+**Note:** If you prefer to use the Twilio CLI directly:
 ```bash
 pnpm run copy-assets
-twilio serverless:deploy
+twilio serverless:deploy --production
 ```
 
 ### Environment Configuration for Production
 
-Make sure to update these key variables for production:
-- `SERVER_URL`: Your production domain (e.g., `https://yourdomain.com`)
+Make sure to update these key variables in `.env.prod`:
+- `SERVER_URL`: Your production domain (e.g., `https://genesyspay-prod.twil.io`)
 - `ACCOUNT_SID` and `AUTH_TOKEN`: Your production Twilio credentials
 - `PAY_SYNC_SERVICE_SID`: The Sync service SID from your production setup
+
+### Environment Files
+
+The project uses separate environment files for different stages:
+- `.env.dev` - Development environment (local testing with ngrok)
+- `.env.prod` - Production environment (deployed to Twilio)
+- `.env.example` - Template file (safe to commit to git)
+
+All `.env.*` files except `.env.example` are ignored by git to protect your credentials.
 
 ## JSClient
 
@@ -475,5 +512,443 @@ The JSClient implements intelligent automatic progression through payment field 
 - **Robust Validation**: Content-based progression prevents errors
 - **Error Recovery**: Individual fields can be reset and recaptured
 - **Real-time Sync**: Uses Twilio Sync for instant updates
+
+## Warm Call Transfer (SIP REFER)
+
+This integration supports warm call transfers initiated from SIP phones using the standard SIP REFER protocol. When an agent presses the transfer button on their SIP phone, the call can be transferred to another agent or phone number while preserving UUI tracking for Genesys integration and payment session continuity.
+
+### Overview
+
+**Warm Transfer** allows an agent to:
+1. Put the caller on hold
+2. Dial and speak with the transfer target (consultation)
+3. Complete the transfer, bridging the caller directly to the target
+4. If the target doesn't answer, the caller is automatically reconnected to the agent
+
+This feature uses three specialized functions that extend the base call routing functions with REFER support:
+
+- **`callTransfer.js`** - Handles the transfer request and routes to the destination
+- **`callToSIPwithRefer.js`** - Inbound PSTN → SIP handler with transfer capability
+- **`callToPSTNwithRefer.js`** - Outbound SIP → PSTN handler with transfer capability
+
+### How It Works
+
+#### Agent Workflow
+
+1. **During an Active Call**
+   - Agent is speaking with a caller on their SIP phone (Polycom, Cisco, Yealink, etc.)
+   - Agent decides to transfer the call to another agent or department
+
+2. **Initiate Transfer**
+   - Agent presses the **transfer button** on their physical SIP phone
+   - Phone displays a transfer dialog/interface
+
+3. **Enter Transfer Destination**
+   - Agent enters the transfer destination:
+     - **SIP Extension**: e.g., `1234` or `agent2@domain.com`
+     - **PSTN Number**: e.g., `+15551234567`
+
+4. **Warm Transfer (Optional Consultation)**
+   - For warm transfer, agent can speak with transfer target first
+   - Agent introduces the caller and situation
+   - Agent decides to complete or cancel the transfer
+
+5. **Complete Transfer**
+   - Agent completes the transfer on their phone
+   - SIP phone sends a **SIP REFER message** to Twilio
+   - Twilio processes the transfer automatically
+
+#### Behind the Scenes
+
+1. **SIP REFER Message**
+   - SIP phone sends REFER via standard SIP protocol (RFC 3515)
+   - No HTTP calls or API integration needed
+   - Twilio receives the REFER and extracts the transfer target
+
+2. **Transfer Handler Invocation**
+   - Twilio invokes `/pv/callTransfer` webhook
+   - Receives: `ReferTransferTarget`, `CallSid`, `From`, `To`, UUI headers
+
+3. **Destination Parsing**
+   - Function parses the transfer target:
+     - If target contains E.164 number → PSTN transfer
+     - If target is SIP extension/user → SIP transfer
+
+4. **UUI Preservation**
+   - Extracts UUI from `x-inin-cnv` header
+   - Passes UUI to transfer target for tracking
+   - Ensures payment sessions follow the call
+
+5. **Transfer Completion**
+   - Original caller is bridged to transfer target
+   - If target answers: transfer completes
+   - If target doesn't answer: caller reconnected to agent
+
+### Configuration
+
+To enable warm transfers, you must configure your Twilio resources to use the REFER-enabled call handlers instead of the standard ones.
+
+#### 1. Inbound PSTN Calls (Twilio Phone Number)
+
+**Use Case**: When customers call in and agents may need to transfer them.
+
+**Configuration Location**: Twilio Console → Phone Numbers → Active Numbers → (Select Number)
+
+**Steps**:
+1. Navigate to the **Voice Configuration** section
+2. Under "A CALL COMES IN":
+   - Set to: **Webhook**
+   - URL: `https://your-runtime-domain/pv/callToSIPwithRefer`
+   - Method: **POST**
+3. Click **Save**
+
+**What This Enables**:
+- Inbound PSTN calls are routed to your SIP Domain
+- `answerOnBridge: true` keeps caller connected during transfer
+- `referUrl` enables the SIP phone to send REFER messages
+- When agent transfers, call remains active and UUI is preserved
+
+#### 2. Outbound SIP Calls (SIP Domain)
+
+**Use Case**: When agents make outbound calls and may need to transfer them.
+
+**Configuration Location**: Twilio Console → Phone Numbers → SIP Domains → (Select Domain)
+
+**Steps**:
+1. Navigate to the **Voice Configuration** section
+2. Under "REQUEST URL":
+   - URL: `https://your-runtime-domain/pv/callToPSTNwithRefer`
+   - Method: **POST**
+3. Click **Save**
+
+**What This Enables**:
+- Outbound calls from SIP Domain are routed to PSTN
+- `answerOnBridge: true` keeps caller connected during transfer
+- `referUrl` enables the SIP phone to send REFER messages
+- When agent transfers, call remains active and UUI is preserved
+
+#### 3. No Additional Configuration Needed
+
+- **SIP Domain REFER URL**: Not required (configured in the Dial verb itself)
+- **Phone Authentication**: Uses standard SIP authentication
+- **Network Access**: Ensure SIP phones can reach Twilio SIP infrastructure
+
+### Transfer Capabilities
+
+#### Supported Transfer Types
+
+**1. SIP to SIP Transfer**
+- Agent on SIP extension transfers to another SIP extension
+- Example: Extension 1001 transfers to extension 1002
+- UUI passed via `User-to-User` SIP header
+
+**2. SIP to PSTN Transfer**
+- Agent on SIP phone transfers to external phone number
+- Example: Agent transfers to +15551234567
+- UUI tracked in Sync Map for payment continuity
+
+**3. PSTN to SIP Transfer**
+- Agent on SIP phone (with inbound PSTN caller) transfers to SIP extension
+- Example: Customer called in, agent transfers to specialist
+- UUI preserved through transfer
+
+**4. PSTN to PSTN Transfer**
+- Agent on SIP phone (with inbound PSTN caller) transfers to PSTN number
+- Example: Customer called in, agent transfers to external number
+- UUI preserved through transfer
+
+#### Transfer Target Format
+
+When entering transfer destination on SIP phone:
+
+**For SIP Extensions**:
+```
+1234                    # Extension only
+agent@domain.com        # Full SIP URI
+sip:specialist@domain   # Explicit SIP URI
+```
+
+**For PSTN Numbers**:
+```
+15551234567             # National format (will be converted to +E.164)
++15551234567            # International E.164 format (preferred)
+```
+
+### Testing Warm Transfers
+
+#### Prerequisites
+- Active call established using `callToSIPwithRefer` or `callToPSTNwithRefer`
+- SIP phone with transfer button functionality
+- Transfer destination (SIP extension or PSTN number)
+
+#### Test Case 1: SIP Extension Transfer
+
+1. **Setup**:
+   - Establish an active call on your SIP phone
+   - Have a second SIP extension available to receive transfer
+
+2. **Execute Transfer**:
+   - Press transfer button on SIP phone
+   - Enter destination extension (e.g., `1234`)
+   - (Optional) Speak with target for warm transfer
+   - Complete the transfer
+
+3. **Verify**:
+   - Check Twilio Function logs for `callTransfer` execution
+   - Verify transfer destination parsed correctly as SIP
+   - Confirm UUI was passed in status callback
+   - Verify original caller is connected to target
+
+#### Test Case 2: PSTN Number Transfer
+
+1. **Setup**:
+   - Establish an active call on your SIP phone
+   - Have a phone number ready to receive transfer
+
+2. **Execute Transfer**:
+   - Press transfer button on SIP phone
+   - Enter destination number (e.g., `+15551234567`)
+   - (Optional) Speak with target for warm transfer
+   - Complete the transfer
+
+3. **Verify**:
+   - Check Twilio Function logs for `callTransfer` execution
+   - Verify transfer destination parsed correctly as PSTN
+   - Confirm UUI was passed in status callback
+   - Verify original caller is connected to target
+
+#### Test Case 3: Transfer with Active Payment
+
+1. **Setup**:
+   - Establish call and initiate payment capture
+   - Start payment session in JSClient
+   - Have transfer destination ready
+
+2. **Execute Transfer**:
+   - During active payment session, transfer the call
+   - Complete the transfer
+
+3. **Verify**:
+   - Payment session remains attached to correct CallSid
+   - UUI mapping persists in Sync Map
+   - Transferred agent can continue payment capture
+   - No data loss or session interruption
+
+### Monitoring and Logs
+
+#### Key Log Messages
+
+**callTransfer.js**:
+```
+callTransfer: Processing REFER for Call SID CAxxxx to target: sip:+15551234567@domain.com
+callTransfer: UUI for transfer: CA1234567890abcdef
+callTransfer: Type=pstn, Destination=+15551234567, CallerID=+14445556666
+callTransfer: Dialing PSTN +15551234567 with UUI CA1234567890abcdef
+```
+
+**uuiSyncUpdate.js**:
+```
+uuiSyncUpdate: Updating UUI Sync Map with UUI: CA1234567890abcdef and PSTN Call SID: CAxxxx
+```
+
+#### Viewing Logs
+
+1. **Navigate to Twilio Console**
+   - Go to **Monitor** → **Logs** → **Functions**
+
+2. **Filter for Transfer Functions**
+   - Search for: `callTransfer`
+   - Look for execution timestamps matching your test
+
+3. **Check for Errors**
+   - Red error entries indicate failures
+   - Common issues: Invalid E.164 format, missing UUI, parse errors
+
+### Troubleshooting
+
+#### Issue: Transfer Button Doesn't Work
+
+**Symptoms**: Pressing transfer on SIP phone has no effect or shows error
+
+**Solutions**:
+- Verify you're using `callToSIPwithRefer` or `callToPSTNwithRefer`, not the standard versions
+- Check SIP phone supports SIP REFER (most modern phones do)
+- Review SIP phone configuration for transfer settings
+- Check Twilio error logs for 403 REFER rejection
+
+**Validation**:
+```bash
+# Check which function is configured
+# Twilio Console → Phone Numbers → (Your Number) → Voice Configuration
+# Should show: /pv/callToSIPwithRefer (not /pv/callToSIP)
+```
+
+#### Issue: Transfer Fails with 403 Error
+
+**Symptoms**: SIP phone shows transfer failed, Twilio logs show 403 error
+
+**Cause**: Call was established without `referUrl` attribute
+
+**Solutions**:
+- Ensure using `callToSIPwithRefer` or `callToPSTNwithRefer` handlers
+- Redeploy functions if recently updated
+- Verify `referUrl: '/pv/callTransfer'` is in the Dial verb
+- Restart calls using the updated handlers
+
+**Twilio Support Confirmation**:
+> Error: "REFER was attempted on an established <Dial> session without a referUrl attribute specified"
+
+#### Issue: Transfer Succeeds but UUI Lost
+
+**Symptoms**: Transfer completes but payment session can't be found
+
+**Cause**: UUI not passed through transfer
+
+**Solutions**:
+- Verify `callTransfer.js` is extracting UUI correctly
+- Check Function logs for UUI value
+- Confirm `x-inin-cnv` header present in original call
+- Verify Sync Map is being updated with transfer CallSid
+
+**Debug Steps**:
+1. Check `callTransfer` logs for UUI extraction
+2. Verify `uuiSyncUpdate` was called with correct UUI
+3. Check Sync Map contains mapping for transfer CallSid
+4. Confirm transfer destination received UUI header
+
+#### Issue: Transfer Target Invalid
+
+**Symptoms**: Transfer fails with "busy" response or error
+
+**Cause**: Transfer destination couldn't be parsed
+
+**Solutions**:
+- For PSTN: Ensure E.164 format (e.g., `+15551234567`)
+- For SIP: Verify extension exists in your SIP Domain
+- Check Function logs for parse errors
+- Verify SIP phone sending valid `Refer-To` header
+
+**Valid Formats**:
+```
+# PSTN
+sip:+15551234567@domain.com  ✓
+sip:15551234567@domain.com   ✓ (will be converted)
+sip:555-1234@domain.com      ✗ (invalid characters)
+
+# SIP
+sip:1234@domain.com          ✓
+sip:agent@domain.com         ✓
+sip:invalid user@domain.com  ✗ (spaces not allowed)
+```
+
+#### Issue: Warm Transfer Not Working
+
+**Symptoms**: Transfer happens immediately without consultation phase
+
+**Cause**: May depend on SIP phone behavior
+
+**Solutions**:
+- Check SIP phone transfer settings (blind vs attended transfer)
+- Some phones require specific button sequence for warm transfer
+- Verify phone firmware supports attended transfer
+- Consult SIP phone documentation for warm transfer procedure
+
+**Note**: The `answerOnBridge: true` setting enables Twilio to keep the caller connected, but the consultation phase is managed by the SIP phone itself before sending the REFER.
+
+### Migration from Standard to REFER-Enabled Handlers
+
+If you're currently using the standard `callToSIP` and `callToPSTN` handlers:
+
+#### Step 1: Deploy New Functions
+```bash
+pnpm deploy
+```
+
+This deploys:
+- `callTransfer.js`
+- `callToSIPwithRefer.js`
+- `callToPSTNwithRefer.js`
+
+#### Step 2: Update Phone Number Configuration
+
+**Before**:
+```
+Webhook: https://your-domain/pv/callToSIP
+```
+
+**After**:
+```
+Webhook: https://your-domain/pv/callToSIPwithRefer
+```
+
+#### Step 3: Update SIP Domain Configuration
+
+**Before**:
+```
+Request URL: https://your-domain/pv/callToPSTN
+```
+
+**After**:
+```
+Request URL: https://your-domain/pv/callToPSTNwithRefer
+```
+
+#### Step 4: Test New Call Flow
+
+1. Make test call using new handlers
+2. Attempt transfer from SIP phone
+3. Verify transfer completes successfully
+4. Check UUI preservation in Sync Map
+
+#### Rollback Plan
+
+If issues occur, simply revert the webhook URLs to the original handlers:
+- Change back to `/pv/callToSIP`
+- Change back to `/pv/callToPSTN`
+
+The original functions remain unchanged and available.
+
+### Security Considerations
+
+**SIP REFER Security**:
+- REFER messages authenticated via SIP credentials
+- Only established call legs can send REFER
+- Invalid transfer targets are rejected with error
+
+**UUI Protection**:
+- UUI transferred via SIP headers (not public HTTP)
+- Sync Map access controlled by Twilio credentials
+- TTL ensures stale mappings are cleaned up (12 hours)
+
+**Transfer Restrictions**:
+- Only E.164 validated numbers allowed for PSTN
+- SIP transfers limited to configured domain
+- Malformed requests rejected with 'busy' response
+
+### Architecture Notes
+
+**Why Separate Files?**
+
+The REFER-enabled handlers (`callToSIPwithRefer` and `callToPSTNwithRefer`) are separate files to allow:
+- **Safe Testing**: Test transfer functionality without affecting production
+- **Gradual Migration**: Migrate specific numbers/domains incrementally
+- **Easy Rollback**: Revert to standard handlers if needed
+- **Clear Separation**: Standard vs transfer-enabled flows are explicit
+
+**Why `answerOnBridge: true`?**
+
+This setting keeps the original caller connected while dialing the transfer target:
+- If target answers → transfer completes
+- If target doesn't answer → caller reconnected to agent
+- Provides failsafe for failed transfers
+
+**Why Use `<Dial>` Instead of `<Refer>`?**
+
+The `callTransfer.js` function uses `<Dial>` verb (not `<Refer>`) because:
+- Works for both SIP and PSTN transfer targets
+- Full Twilio control and monitoring
+- Reliable status callbacks for UUI tracking
+- Better error handling and logging
+- Consistent with existing call routing patterns
 
 

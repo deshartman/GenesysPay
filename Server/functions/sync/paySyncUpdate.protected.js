@@ -41,7 +41,11 @@
  */
 exports.handler = async (context, event, callback) => {
 
-  const restClient = context.getTwilioClient();
+  // Create a Twilio client explicitly configured for us1 region
+  // Sync is only available in us1, regardless of where Functions are deployed
+  const restClient = require('twilio')(context.ACCOUNT_SID, context.AUTH_TOKEN, {
+    region: 'us1'
+  });
 
   // Update it under a try/catch and if the Item does not exist, create it first and then add item
   try {
