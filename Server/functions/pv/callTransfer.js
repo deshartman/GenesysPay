@@ -29,10 +29,22 @@ exports.handler = async (context, event, callback) => {
     return callback('Missing ReferTransferTarget parameter');
   }
 
-  const referTarget = event.ReferTransferTarget;
-  console.log(`callTransfer: Processing REFER for Call SID ${event.CallSid} to target: ${referTarget}`);
+  // Step 2: Clean and normalize transfer target
+  let target = event.ReferTransferTarget.trim();
+  if (target.startsWith('<') && target.endsWith('>')) {
+    target = target.slice(1, -1);
+  }
 
-  // Step 2: Extract UUI from headers
+  // Add + prefix if missing (for both SIP and PSTN)
+  if (target.startsWith('sip:') && !target.startsWith('sip:+')) {
+    target = target.replace('sip:', 'sip:+');
+  } else if (!target.startsWith('sip:') && !target.startsWith('+')) {
+    target = `+${target}`;
+  }
+
+  console.log(`callTransfer: Processing REFER for Call SID ${event.CallSid} to target: ${target}`);
+
+  // Step 3: Extract UUI from headers
   const UUI = event["SipHeader_x-inin-cnv"]
            || event["SipHeader_User-to-User"]
            || event.CallSid;
@@ -40,43 +52,25 @@ exports.handler = async (context, event, callback) => {
   console.log(`callTransfer: UUI for transfer: ${UUI}`);
 
   try {
-    // Step 3: Parse transfer target
-    let transferType = 'unknown';
-    let transferDestination = null;
+    // Step 4: Determine transfer type and validate
+    let transferType;
+    let transferDestination;
 
-    if (referTarget.startsWith('sip:')) {
-      // Parse SIP URI: sip:user@domain or sip:+15551234567@domain
-      const sipMatch = referTarget.match(/^sip:([^@]+)@(.+)/);
+    if (target.startsWith('sip:')) {
+      // SIP call
+      transferType = 'sip';
+      transferDestination = target;
+    } else {
+      // PSTN call
+      transferType = 'pstn';
+      transferDestination = target;
 
-      if (sipMatch) {
-        const userPart = sipMatch[1];
-        const domain = sipMatch[2];
-
-        // Check if user part looks like a phone number (E.164)
-        if (/^(\+)?[0-9]+$/.test(userPart)) {
-          // It's a PSTN destination
-          transferType = 'pstn';
-          transferDestination = userPart.startsWith('+') ? userPart : `+${userPart}`;
-
-          // Validate E.164 format
-          if (!transferDestination.match(/^\+[1-9]\d{1,14}$/)) {
-            console.error(`callTransfer: Invalid E.164 number: ${transferDestination}`);
-            voiceResponse.reject({ reason: 'busy' });
-            return callback(null, voiceResponse);
-          }
-        } else {
-          // It's a SIP destination (user, extension, or agent)
-          transferType = 'sip';
-          transferDestination = referTarget;
-        }
+      // Validate E.164 format
+      if (!transferDestination.match(/^\+[1-9]\d{1,14}$/)) {
+        console.error(`callTransfer: Invalid E.164 number: ${transferDestination}`);
+        voiceResponse.reject({ reason: 'busy' });
+        return callback(null, voiceResponse);
       }
-    }
-
-    // Step 4: Validate we successfully parsed the target
-    if (transferType === 'unknown' || !transferDestination) {
-      console.error(`callTransfer: Could not parse transfer target: ${referTarget}`);
-      voiceResponse.reject({ reason: 'busy' });
-      return callback(null, voiceResponse);
     }
 
     // Step 5: Extract original caller for caller ID
