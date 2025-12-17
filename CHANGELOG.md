@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2025-12-17
+
+### Fixed
+- Fixed Sync callback URLs to use dedicated US1 Functions URL for multi-region deployments
+- Resolved issue where relative Sync paths would fail in dev environments using ngrok or non-US1 regions
+- Ensured Sync statusCallback URLs always target US1 region where Sync services are available
+
+### Changed
+- Introduced `SYNC_SERVER_URL` environment variable specifically for Sync callback URLs
+- Updated all statusCallback URLs in voice routing functions to use `SYNC_SERVER_URL` instead of `SERVER_URL`
+- Updated all payment function statusCallback URLs to use `SYNC_SERVER_URL`
+- Modified environment files (`.env.dev`, `.env.prod`, `.env.example`) to include `SYNC_SERVER_URL` configuration
+
+### Technical Details
+- `SYNC_SERVER_URL` must point to your US1 Twilio Functions deployment URL
+- This allows `SERVER_URL` to use ngrok for local development while Sync callbacks target production US1 URL
+- Affected files:
+  - Voice: `callToSIP.js`, `callToPSTN.js`, `callTransfer.js`, `callToSIPwithRefer.js`, `callToPSTNwithRefer.js`
+  - Payment: `startCapture.js`, `changeStatus.js`, `changeCapture.js`
+- Updated TwiML documentation in function comments to reflect new `SYNC_SERVER_URL` usage
+
+### Migration Notes
+- **Action Required**: Update `SYNC_SERVER_URL` in your `.env.dev` and `.env.prod` files
+- For initial setup: Deploy functions once to get your Functions URL, then update `SYNC_SERVER_URL` with that URL
+- For existing deployments: Set `SYNC_SERVER_URL` to your current production Functions URL (US1 region)
+- Local dev: `SYNC_SERVER_URL` should point to your deployed US1 Functions, not your ngrok tunnel
+
 ## [2.2.0] - 2025-12-11
 
 ### Fixed

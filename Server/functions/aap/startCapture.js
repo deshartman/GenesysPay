@@ -19,7 +19,7 @@ exports.handler = async (context, event, callback) => {
   // Create the payment session
   const sessionData = {
     idempotencyKey: event.callSid + Date.now().toString(),
-    statusCallback: `${context.SERVER_URL}/sync/paySyncUpdate`,
+    statusCallback: `${context.SYNC_SERVER_URL}/sync/paySyncUpdate`,
     // statusCallback: `/sync/paySyncUpdate`, // This is the default statusCallback, which is being looked at in https://issues.corp.twilio.com/browse/VAUTO-1432
     ...(event.chargeAmount === 0 ? { tokenType: event.tokenType } : {}), // Only include tokenType if chargeAmount is 0
     chargeAmount: event.chargeAmount,

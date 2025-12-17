@@ -2,7 +2,7 @@
 
 This project consists of two main components that work together to handle payment processing with Genesys and Twilio integration. The client has been migrated to TypeScript for improved type safety and development experience.
 
-**Version 2.1.0** - Latest updates include deployment script fixes and enhanced visual feedback during payment capture.
+**Version 2.2.1** - Latest updates include dedicated SYNC_SERVER_URL for multi-region deployments and local development with ngrok.
 
 **Latest Changes:** See [CHANGELOG.md](CHANGELOG.md) for version history and migration notes.
 
@@ -44,7 +44,13 @@ ACCOUNT_SID=your_twilio_account_sid
 AUTH_TOKEN=your_twilio_auth_token
 
 # Server configuration
-SERVER_URL=htpps://your_server_url. If this is ngrok, then use the prefix style, e.g., https://server-SOMENAME.ngrok.io
+SERVER_URL=https://your_server_url  # For dev: use ngrok (e.g., https://server-SOMENAME.ngrok.io)
+
+# Sync server configuration
+# IMPORTANT: This must point to your deployed US1 Twilio Functions URL (not ngrok!)
+# SYNC_SERVER_URL is used for all Sync statusCallback URLs and must be accessible by Twilio
+# For initial setup: Leave as placeholder, deploy once, then update with your Functions URL
+SYNC_SERVER_URL=https://your-deployed-functions-url.twil.io
 
 # Payment configuration
 PAYMENT_CONNECTOR=your_payment_connector
@@ -55,37 +61,64 @@ INCLUDE_POSTAL_CODE=false
 # NOTE: Twilio Sync is only available in the us1 region. The code automatically
 # configures Sync API calls to use us1, regardless of where your Functions are deployed.
 # This allows deployment to au1, ie1, or other regions while still using Sync.
-PAY_SYNC_SERVICE_NAME name of the Sync service
+PAY_SYNC_SERVICE_NAME=name_of_the_sync_service
 PAY_SYNC_SERVICE_SID=your_sync_service_sid  # Set after running setupSyncServices
 
 # SIP configuration (required for call routing)
 # SIP_DOMAIN_URI=your_sip_domain  # Format: customer.sip.example.com (no sip: prefix or port)
 # Used by /pv/callToSIP to route inbound PSTN calls to customer's SIP Domain
 
-# One-time setup variables (only needed for initial sync service setup)
-# PAY_SYNC_SERVICE_NAME=your_sync_service_name  # Used by setupSyncServices.js
-
 # Sync map names (default values, only change if needed)
 # SYNC_PAY_MAP_NAME=payMap  # Stores payment session data
 # SYNC_UUI_MAP_NAME=uuiMap  # Stores UUI to CallSid mappings
 ```
 
-6. Set up the Sync service (one-time setup):
+6. **Initial Deployment to Get Functions URL** (Required for SYNC_SERVER_URL):
+```bash
+# Deploy the functions to get your Twilio Functions URL
+pnpm run deploy
+
+# After deployment completes, Twilio will display your Functions URL:
+# Example output:
+# Deployment Details
+# Domain: genesyspay-3512-dev.sydney.au1.twil.io
+# Service:
+#   GenesysPay (ZS...)
+# Environment:
+#   production (ZE...)
+# Build SID:
+#   ZB...
+
+# Copy the Domain URL (e.g., https://genesyspay-3512-dev.sydney.au1.twil.io)
+# Update SYNC_SERVER_URL in both .env.dev and .env.prod with this URL
+
+# Example:
+# SYNC_SERVER_URL=https://genesyspay-3512-dev.sydney.au1.twil.io
+```
+
+**Why SYNC_SERVER_URL is Required:**
+- Twilio Sync callbacks must reach your deployed Functions, not local dev servers
+- In development: `SERVER_URL` uses ngrok for local testing, but `SYNC_SERVER_URL` points to deployed Functions
+- In production: Both `SERVER_URL` and `SYNC_SERVER_URL` typically point to the same deployed Functions URL
+- This separation allows local development with ngrok while maintaining Sync functionality
+
+7. Set up the Sync service (one-time setup):
 ```bash
 # 1. Ensure PAY_SYNC_SERVICE_NAME is set in your .env.dev file
-# 2. Run the setup endpoint:
+# 2. Run the setup endpoint using your deployed Functions URL:
 curl -X POST https://<your-runtime-domain>/sync/setupSyncServices
 # 3. Copy the returned service SID to PAY_SYNC_SERVICE_SID in both .env.dev and .env.prod
 ```
 
-7. Deploy the serverless functions:
+8. **Redeploy with Updated Environment Variables**:
 ```bash
+# After updating SYNC_SERVER_URL and PAY_SYNC_SERVICE_SID in your .env files:
 pnpm run deploy
 ```
 
 **Note:** The server automatically copies JSClient files to the `assets/` directory when starting or deploying. This ensures the latest client files are available through the serverless functions.
 
-8. Configure Twilio Console resources:
+9. Configure Twilio Console resources:
    - Set up phone number webhooks for inbound calls
    - Configure SIP Domain for outbound calls
    - See the [Twilio Console Configuration](#twilio-console-configuration) section below for detailed steps
