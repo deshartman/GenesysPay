@@ -1,6 +1,6 @@
 {
   "name": "GenesysPay",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "An example server for handling payments using Twilio Functions and Sync with a simple JS based frontend server out of Twilio Assets",
   "private": true,
   "source": "assets/payment.html",

@@ -11,13 +11,11 @@
  *    <Dial callerId={{#e164}}{{From}}{{/e164}}>
  *     <Number {{#e164}}{{To}}{{/e164}}
  *      statusCallbackEvent: 'answered',
- *      statusCallback: `{{SYNC_SERVER_URL}}/sync/uuiSyncUpdate?CallDirection=toPSTN&UUI={{SipHeader_User-to-User}}`,
+ *      statusCallback: `{{SERVER_URL}}/sync/uuiSyncUpdate?CallDirection=toPSTN&UUI={{SipHeader_User-to-User}}`,
  *      statusCallbackMethod: 'POST'>
  *    </Number>
  *    </Dial>
  * </Response>
- *
- * NOTE: SYNC_SERVER_URL must point to US1 Functions URL (Sync only works in US1)
  *
  */
 exports.handler = async (context, event, callback) => {
@@ -37,7 +35,7 @@ exports.handler = async (context, event, callback) => {
       {
         // Only update Sync when call is answered
         statusCallbackEvent: 'answered',
-        statusCallback: `${context.SYNC_SERVER_URL}/sync/uuiSyncUpdate?CallDirection=toPSTN&UUI=${UUI}`,
+        statusCallback: `${context.SERVER_URL}/sync/uuiSyncUpdate?CallDirection=toPSTN&UUI=${UUI}`,
         statusCallbackMethod: 'POST'
       },
       to);

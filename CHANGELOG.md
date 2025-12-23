@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2025-12-23
+
+### Changed
+- Simplified configuration by removing `SYNC_SERVER_URL` environment variable
+- All statusCallback URLs now use `SERVER_URL` for both local development and production
+- Updated all voice routing functions (callToSIP, callToPSTN, callTransfer, callToSIPwithRefer, callToPSTNwithRefer) to use `SERVER_URL`
+- Updated all payment functions (startCapture, changeStatus, changeCapture) to use `SERVER_URL`
+- Removed `SYNC_SERVER_URL` from all environment files (.env.dev, .env.prod, .env.example)
+
+### Technical Details
+- Testing confirmed that `SERVER_URL` works correctly with ngrok for local development
+- Twilio statusCallback URLs require full URLs with protocol (https://), not relative paths
+- Both Sync callbacks and voice routing callbacks can use the same `SERVER_URL`
+- Affected files:
+  - Voice: `callToSIP.js`, `callToPSTN.js`, `callTransfer.js`, `callToSIPwithRefer.js`, `callToPSTNwithRefer.js`
+  - Payment: `startCapture.js`, `changeStatus.js`, `changeCapture.js`
+  - Environment: `.env.dev`, `.env.prod`, `.env.example`
+
+### Migration Notes
+- **Action Required**: Remove `SYNC_SERVER_URL` from your `.env.dev` and `.env.prod` files if upgrading from 2.2.1
+- Ensure `SERVER_URL` points to your ngrok domain for local development or your Twilio Functions URL for production
+- No functional changes - this is a simplification that maintains all existing behavior
+
 ## [2.2.1] - 2025-12-17
 
 ### Fixed

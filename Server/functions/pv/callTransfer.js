@@ -90,7 +90,7 @@ exports.handler = async (context, event, callback) => {
       voiceResponse.dial({ callerId: callerIdForTransfer }).number(
         {
           statusCallbackEvent: 'answered',
-          statusCallback: `${context.SYNC_SERVER_URL}/sync/uuiSyncUpdate?CallDirection=toPSTN&UUI=${UUI}`,
+          statusCallback: `${context.SERVER_URL}/sync/uuiSyncUpdate?CallDirection=toPSTN&UUI=${UUI}`,
           statusCallbackMethod: 'POST'
         },
         transferDestination
@@ -106,7 +106,7 @@ exports.handler = async (context, event, callback) => {
       voiceResponse.dial().sip(
         {
           statusCallbackEvent: 'answered',
-          statusCallback: `${context.SYNC_SERVER_URL}/sync/uuiSyncUpdate?CallDirection=toSIP&UUI=${UUI}`,
+          statusCallback: `${context.SERVER_URL}/sync/uuiSyncUpdate?CallDirection=toSIP&UUI=${UUI}`,
           statusCallbackMethod: 'POST'
         },
         sipTarget

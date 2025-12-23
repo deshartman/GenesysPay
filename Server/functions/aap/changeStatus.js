@@ -24,8 +24,7 @@ exports.handler = async (context, event, callback) => {
       .update({
         status: event.status,
         idempotencyKey: event.callSid + Date.now().toString(),
-        statusCallback: `${context.SYNC_SERVER_URL}/sync/paySyncUpdate`,
-        // statusCallback: `/sync/paySyncUpdate`, // This is the default statusCallback, which is being looked at in https://issues.corp.twilio.com/browse/VAUTO-1432
+        statusCallback: `${context.SERVER_URL}/sync/paySyncUpdate`,
       });
 
     twilioResponse.setBody(paymentSession);

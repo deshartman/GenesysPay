@@ -16,14 +16,12 @@
  *    <Dial answerOnBridge="true" referUrl="/pv/callTransfer" referMethod="POST">
  *      <Sip
  *        statusCallbackEvent: 'answered',
- *        statusCallback: `{{SYNC_SERVER_URL}}/sync/uuiSyncUpdate?CallDirection=toSIP&UUI={{CallSid}}`,
+ *        statusCallback: `{{SERVER_URL}}/sync/uuiSyncUpdate?CallDirection=toSIP&UUI={{CallSid}}`,
  *        statusCallbackMethod: 'POST'>
  *       sip:{{To}}@{{SIP_DOMAIN_URI}}?User-to-User={{CallSid}}
  *      </Sip>
  *    </Dial>
  * </Response>
- *
- * NOTE: SYNC_SERVER_URL must point to US1 Functions URL (Sync only works in US1)
  *
  */
 exports.handler = async (context, event, callback) => {
@@ -45,7 +43,7 @@ exports.handler = async (context, event, callback) => {
       {
         // Only update Sync when call is answered
         statusCallbackEvent: 'answered',
-        statusCallback: `${context.SYNC_SERVER_URL}/sync/uuiSyncUpdate?CallDirection=toSIP&UUI=${UUI}`,
+        statusCallback: `${context.SERVER_URL}/sync/uuiSyncUpdate?CallDirection=toSIP&UUI=${UUI}`,
         statusCallbackMethod: 'POST'
       },
       sipTo);

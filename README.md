@@ -2,7 +2,7 @@
 
 This project consists of two main components that work together to handle payment processing with Genesys and Twilio integration. The client has been migrated to TypeScript for improved type safety and development experience.
 
-**Version 2.2.1** - Latest updates include dedicated SYNC_SERVER_URL for multi-region deployments and local development with ngrok.
+**Version 2.2.2** - Simplified configuration by removing SYNC_SERVER_URL. All webhooks now use SERVER_URL for both local and production environments.
 
 **Latest Changes:** See [CHANGELOG.md](CHANGELOG.md) for version history and migration notes.
 
@@ -44,13 +44,9 @@ ACCOUNT_SID=your_twilio_account_sid
 AUTH_TOKEN=your_twilio_auth_token
 
 # Server configuration
-SERVER_URL=https://your_server_url  # For dev: use ngrok (e.g., https://server-SOMENAME.ngrok.io)
-
-# Sync server configuration
-# IMPORTANT: This must point to your deployed US1 Twilio Functions URL (not ngrok!)
-# SYNC_SERVER_URL is used for all Sync statusCallback URLs and must be accessible by Twilio
-# For initial setup: Leave as placeholder, deploy once, then update with your Functions URL
-SYNC_SERVER_URL=https://your-deployed-functions-url.twil.io
+# For local dev: use ngrok URL (e.g., https://server-SOMENAME.ngrok.dev)
+# For production: use deployed Twilio Functions URL (e.g., https://genesyspay-3512-dev.twil.io)
+SERVER_URL=https://your_server_url
 
 # Payment configuration
 PAYMENT_CONNECTOR=your_payment_connector
@@ -58,9 +54,6 @@ INCLUDE_CVC=true
 INCLUDE_POSTAL_CODE=false
 
 # Sync service configuration
-# NOTE: Twilio Sync is only available in the us1 region. The code automatically
-# configures Sync API calls to use us1, regardless of where your Functions are deployed.
-# This allows deployment to au1, ie1, or other regions while still using Sync.
 PAY_SYNC_SERVICE_NAME=name_of_the_sync_service
 PAY_SYNC_SERVICE_SID=your_sync_service_sid  # Set after running setupSyncServices
 
@@ -73,9 +66,11 @@ PAY_SYNC_SERVICE_SID=your_sync_service_sid  # Set after running setupSyncService
 # SYNC_UUI_MAP_NAME=uuiMap  # Stores UUI to CallSid mappings
 ```
 
-6. **Initial Deployment to Get Functions URL** (Required for SYNC_SERVER_URL):
+6. **Deploy to Twilio** (for production) or **Setup for Local Development** (see below):
+
+For production deployment:
 ```bash
-# Deploy the functions to get your Twilio Functions URL
+# Deploy the functions to Twilio
 pnpm run deploy
 
 # After deployment completes, Twilio will display your Functions URL:
@@ -89,41 +84,36 @@ pnpm run deploy
 # Build SID:
 #   ZB...
 
-# Copy the Domain URL (e.g., https://genesyspay-3512-dev.sydney.au1.twil.io)
-# Update SYNC_SERVER_URL in both .env.dev and .env.prod with this URL
-
-# Example:
-# SYNC_SERVER_URL=https://genesyspay-3512-dev.sydney.au1.twil.io
+# Copy the Domain URL and update SERVER_URL in .env.prod:
+# SERVER_URL=https://genesyspay-3512-dev.sydney.au1.twil.io
 ```
 
-**Why SYNC_SERVER_URL is Required:**
-- Twilio Sync callbacks must reach your deployed Functions, not local dev servers
-- In development: `SERVER_URL` uses ngrok for local testing, but `SYNC_SERVER_URL` points to deployed Functions
-- In production: Both `SERVER_URL` and `SYNC_SERVER_URL` typically point to the same deployed Functions URL
-- This separation allows local development with ngrok while maintaining Sync functionality
+For local development:
+```bash
+# Set up ngrok tunnel (see Local Development section below)
+# Update SERVER_URL in .env.dev with your ngrok domain:
+# SERVER_URL=https://server-SOMENAME.ngrok.dev
+```
 
 7. Set up the Sync service (one-time setup):
 ```bash
-# 1. Ensure PAY_SYNC_SERVICE_NAME is set in your .env.dev file
-# 2. Run the setup endpoint using your deployed Functions URL:
-curl -X POST https://<your-runtime-domain>/sync/setupSyncServices
+# 1. Ensure PAY_SYNC_SERVICE_NAME is set in your .env file
+# 2. Run the setup endpoint using either your deployed Functions URL or ngrok URL:
+curl -X POST https://<your-server-url>/sync/setupSyncServices
 # 3. Copy the returned service SID to PAY_SYNC_SERVICE_SID in both .env.dev and .env.prod
-```
-
-8. **Redeploy with Updated Environment Variables**:
-```bash
-# After updating SYNC_SERVER_URL and PAY_SYNC_SERVICE_SID in your .env files:
-pnpm run deploy
 ```
 
 **Note:** The server automatically copies JSClient files to the `assets/` directory when starting or deploying. This ensures the latest client files are available through the serverless functions.
 
-9. Configure Twilio Console resources:
+8. Configure Twilio Console resources:
    - Set up phone number webhooks for inbound calls
    - Configure SIP Domain for outbound calls
    - See the [Twilio Console Configuration](#twilio-console-configuration) section below for detailed steps
 
-**Important:** For local development, configure webhooks with your ngrok URL. For production, use your Twilio Runtime domain.
+**Important:**
+- For local development, set `SERVER_URL` to your ngrok domain and configure webhooks with that ngrok URL
+- For production, set `SERVER_URL` to your deployed Twilio Functions URL and configure webhooks accordingly
+- All statusCallback URLs (for both Sync and voice routing) use the same `SERVER_URL`
 
 ## Local Development
 
@@ -163,6 +153,7 @@ pnpm start
 - JSClient files are served from the Server's assets directory
 - Server functions will be available at your ngrok domain (e.g., https://server.ngrok.dev)
 - The `pnpm start` command automatically copies JSClient files before starting the local server
+- All webhooks (payment statusCallbacks and voice routing) use the same `SERVER_URL` from `.env.dev`
 
 ## Notes
 
@@ -171,6 +162,7 @@ pnpm start
 - The Server component must be deployed to Twilio for production use
 - Local development of the Server component requires the Twilio CLI with serverless plugin
 - Never commit `.env.dev` or `.env.prod` to version control - only `.env.example` should be tracked
+- **Configuration Simplified (v2.2.2)**: All statusCallback URLs now use `SERVER_URL` - no separate sync server URL needed
 
 ## Twilio Console Configuration
 
@@ -350,13 +342,6 @@ After configuration, verify your setup:
 - Verify SIP_DOMAIN_URI is configured in .env
 - Review Function logs for error messages
 
-**Issue: Sync errors in non-us1 regions (au1, ie1, etc.)**
-- **Symptom**: Errors like `getaddrinfo ENOTFOUND sync.sydney.au1.twilio.com`
-- **Cause**: Twilio Sync is only available in the us1 region
-- **Solution**: The code has been updated to automatically use us1 for Sync operations regardless of deployment region
-- **Affected Files**: `uuiSyncUpdate.js`, `paySyncUpdate.protected.js`, `setupSyncServices.js`
-- **No Action Required**: If you have the latest version, Sync will work correctly in any region
-
 **Issue: UUI not mapping**
 - Verify status callbacks are reaching `/sync/uuiSyncUpdate`
 - Check PAY_SYNC_SERVICE_SID is configured correctly
@@ -423,9 +408,11 @@ twilio serverless:deploy --production
 ### Environment Configuration for Production
 
 Make sure to update these key variables in `.env.prod`:
-- `SERVER_URL`: Your production domain (e.g., `https://genesyspay-prod.twil.io`)
+- `SERVER_URL`: Your deployed Twilio Functions domain (e.g., `https://genesyspay-prod.twil.io`)
 - `ACCOUNT_SID` and `AUTH_TOKEN`: Your production Twilio credentials
-- `PAY_SYNC_SERVICE_SID`: The Sync service SID from your production setup
+- `PAY_SYNC_SERVICE_SID`: The Sync service SID from running setupSyncServices
+- `PAYMENT_CONNECTOR`: Your payment connector configuration
+- `SIP_DOMAIN_URI`: Your SIP domain (if using call routing features)
 
 ### Environment Files
 
