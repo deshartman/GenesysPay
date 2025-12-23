@@ -7,7 +7,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build-ts": "npx tsc -p ../JSClient",
-    "copy-assets": "cp -r ../JSClient/src/*.html assets/ && cp -r ../JSClient/src/img assets/ && cp -r ../JSClient/dist/* assets/",
+    "copy-assets": "cp -r ../JSClient/src/*.html assets/ && cp -r ../JSClient/src/*.css assets/ && cp -r ../JSClient/src/img assets/ && cp -r ../JSClient/dist/* assets/",
     "build": "npm run build-ts && npm run copy-assets",
     "start": "npm run build && twilio-run --env .env.dev",
     "deploy": "npm run build && twilio serverless:deploy"

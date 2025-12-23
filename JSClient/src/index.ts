@@ -115,32 +115,32 @@ class PaymentUI {
         const resetCvcBtn = document.getElementById('resetCvcBtn');
         const resetDateBtn = document.getElementById('resetDateBtn');
 
-        // Reset all buttons to outline style
+        // Reset all buttons to default style
         if (resetCardBtn) {
-            resetCardBtn.className = 'btn btn-outline-danger';
+            resetCardBtn.className = 'btn btn-reset';
         }
         if (resetCvcBtn) {
-            resetCvcBtn.className = 'btn btn-outline-danger';
+            resetCvcBtn.className = 'btn btn-reset';
         }
         if (resetDateBtn) {
-            resetDateBtn.className = 'btn btn-outline-danger';
+            resetDateBtn.className = 'btn btn-reset';
         }
 
-        // Set active button to solid style
+        // Set active button to active style
         switch (captureType) {
             case 'payment-card-number':
                 if (resetCardBtn) {
-                    resetCardBtn.className = 'btn btn-danger';
+                    resetCardBtn.className = 'btn btn-reset btn-reset-active';
                 }
                 break;
             case 'security-code':
                 if (resetCvcBtn) {
-                    resetCvcBtn.className = 'btn btn-danger';
+                    resetCvcBtn.className = 'btn btn-reset btn-reset-active';
                 }
                 break;
             case 'expiration-date':
                 if (resetDateBtn) {
-                    resetDateBtn.className = 'btn btn-danger';
+                    resetDateBtn.className = 'btn btn-reset btn-reset-active';
                 }
                 break;
         }
@@ -154,7 +154,7 @@ class PaymentUI {
     private setSubmitButtonActive(): void {
         const submitBtn = document.getElementById('submitBtn') as HTMLButtonElement;
         if (submitBtn) {
-            submitBtn.className = 'btn btn-success px-4';
+            submitBtn.className = 'btn btn-success';
             submitBtn.disabled = false;
         }
     }
@@ -162,7 +162,7 @@ class PaymentUI {
     private setSubmitButtonInactive(): void {
         const submitBtn = document.getElementById('submitBtn') as HTMLButtonElement;
         if (submitBtn) {
-            submitBtn.className = 'btn btn-outline-success px-4';
+            submitBtn.className = 'btn btn-success';
             submitBtn.disabled = true;
         }
     }
@@ -173,15 +173,15 @@ class PaymentUI {
         const resetDateBtn = document.getElementById('resetDateBtn') as HTMLButtonElement;
 
         if (resetCardBtn) {
-            resetCardBtn.className = 'btn btn-outline-danger';
+            resetCardBtn.className = 'btn btn-reset';
             resetCardBtn.disabled = true;
         }
         if (resetCvcBtn) {
-            resetCvcBtn.className = 'btn btn-outline-danger';
+            resetCvcBtn.className = 'btn btn-reset';
             resetCvcBtn.disabled = true;
         }
         if (resetDateBtn) {
-            resetDateBtn.className = 'btn btn-outline-danger';
+            resetDateBtn.className = 'btn btn-reset';
             resetDateBtn.disabled = true;
         }
     }
@@ -210,7 +210,7 @@ class PaymentUI {
     private setCancelButtonInactive(): void {
         const cancelBtn = document.getElementById('cancelBtn') as HTMLButtonElement;
         if (cancelBtn) {
-            cancelBtn.className = 'btn btn-outline-danger px-4';
+            cancelBtn.className = 'btn btn-destructive';
             cancelBtn.disabled = true;
         }
     }
