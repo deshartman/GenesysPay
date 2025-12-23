@@ -22,9 +22,7 @@ exports.handler = async (context, event, callback) => {
 
   // Create a Twilio client explicitly configured for us1 region
   // Sync is only available in us1, regardless of where Functions are deployed
-  const restClient = require('twilio')(context.ACCOUNT_SID, context.AUTH_TOKEN, {
-    region: 'us1'
-  });
+  const restClient = require('twilio')(context.ACCOUNT_SID, context.AUTH_TOKEN);
 
   // Direction of the call
   let PSTNSideCallSid
