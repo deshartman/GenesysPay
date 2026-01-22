@@ -2,7 +2,7 @@
 
 This project consists of two main components that work together to handle payment processing with Genesys and Twilio integration. The client has been migrated to TypeScript for improved type safety and development experience.
 
-**Version 2.2.2** - Simplified configuration by removing SYNC_SERVER_URL. All webhooks now use SERVER_URL for both local and production environments.
+**Version 2.3.0** - Renamed `payCompleteTransfer` to `reconnectAfterPay` for improved code clarity. This is a pure refactoring with no functional changes.
 
 **Latest Changes:** See [CHANGELOG.md](CHANGELOG.md) for version history and migration notes.
 
@@ -970,5 +970,409 @@ The `callTransfer.js` function uses `<Dial>` verb (not `<Refer>`) because:
 - Reliable status callbacks for UUI tracking
 - Better error handling and logging
 - Consistent with existing call routing patterns
+
+## SIP REFER to Pay with Token Transfer
+
+This integration extends warm transfer functionality to enable **payment capture to Twilio <Pay> IVR**. When an agent transfers a call to a special "magic" Pay IVR number, the system:
+1. Captures the REFER details (original transfer destination)
+2. Disconnects the agent SIP leg and connects to Twilio <Pay> for credit card capture and tokenisation
+3. After payment completes, reconnects the call to the original transfer target with the payment token in a custom SIP header, so it can be routed back to the agent based on header info
+
+This enables use cases like "transfer to payment IVR" for secure capture.
+
+### Overview
+
+The system uses a **unified REFER handler** (`callReferHandler.js`) that intelligently routes based on a configurable trigger number:
+
+- **Normal Transfer**: Agent transfers to any regular number → immediate transfer (standard warm transfer)
+- **Pay-First Transfer**: Agent transfers to `PAY_TRIGGER_NUMBER` → Pay IVR → reconnect with payment token
+
+### Key Components
+
+**Functions**:
+- **`/pv/callReferHandler.js`** - Unified handler that routes based on PAY_TRIGGER_NUMBER
+- **`/pv/reconnectAfterPay.js`** - Handles reconnection after payment with token
+- **`/pv/callToSIPwithRefer.js`** - Entry point (uses unified handler)
+
+**Environment Variable**:
+- **`PAY_TRIGGER_NUMBER`** - Special E.164 number that triggers Pay flow (default: `+19999999999`)
+
+### How It Works
+
+#### Call Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 1. PSTN → callToSIPwithRefer → SIP Domain              │
+│    (referUrl='/pv/callReferHandler')                    │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│ 2. Agent presses transfer button on SIP phone           │
+│    - To normal number → Standard transfer               │
+│    - To PAY_TRIGGER_NUMBER → Pay-first flow             │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│ 3. callReferHandler detects PAY_TRIGGER_NUMBER          │
+│    - Logs REFER details to console                      │
+│    - Stores REFER data in Sync Map (REFER_ prefix)      │
+│    - Returns <Pay> TwiML (chargeAmount=0 for token)     │
+│    - SIP leg disconnects (REFER semantics)              │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│ 4. Caller hears Pay IVR, enters credit card             │
+│    - Pay statusCallback → /sync/paySyncUpdate           │
+│    - Payment token stored in Pay Sync Map               │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│ 5. Pay completes → /pv/reconnectAfterPay                │
+│    - Retrieves REFER details from Sync Map              │
+│    - Retrieves payment token from Pay Sync Map          │
+│    - Builds SIP URI with UUI + payment token headers    │
+│    - Dials original transfer target                     │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│ 6. Call reconnects to destination with:                 │
+│    - User-to-User: <original UUI>                       │
+│    - X-Twilio-Payment-Token: <payment token>            │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Normal Transfer Flow
+
+```
+Agent transfers to +15551234567
+    ↓
+callReferHandler detects non-magic number
+    ↓
+Immediately dials +15551234567 with UUI
+    ↓
+Standard warm transfer completes
+```
+
+#### Pay-First Transfer Flow
+
+```
+Agent transfers to +19999999999 (PAY_TRIGGER_NUMBER)
+    ↓
+callReferHandler detects magic number
+    ↓
+Store REFER details + Return <Pay> TwiML
+    ↓
+Caller enters credit card (tokenization, no charge)
+    ↓
+reconnectAfterPay retrieves token + REFER details
+    ↓
+Reconnect to original destination with:
+  - UUI preserved
+  - X-Twilio-Payment-Token header added
+```
+
+### Configuration
+
+#### 1. Environment Setup
+
+Add to your `.env.dev` and `.env.prod` files:
+
+```bash
+# Special number that triggers Pay-first transfer
+# When agent transfers to this number, system will:
+# 1. Collect payment token from caller
+# 2. Reconnect to destination with token in SIP header
+PAY_TRIGGER_NUMBER=+19999999999
+```
+
+**Why `+19999999999`?**
+- ✅ Valid E.164 format (passes Genesys Cloud and Twilio validation)
+- ✅ Unassigned number (won't accidentally dial real destination)
+- ✅ Easy to configure in PBX transfer buttons
+- ✅ Memorable pattern
+
+**Alternative numbers you can use**:
+- `+15550100` to `+15550199` (reserved test number range)
+- Any number you control that you dedicate for this purpose
+
+#### 2. Genesys Cloud PBX Setup
+
+Configure a transfer button or speed dial on the agent's SIP phone:
+
+**Button Label**: "Transfer to Payment"
+**Transfer Destination**: `+19999999999` (or your configured PAY_TRIGGER_NUMBER)
+
+When agents press this button:
+1. Call is put on hold (warm transfer style)
+2. System initiates payment capture
+3. After payment, call reconnects to the actual destination
+
+#### 3. Receiving Destination Configuration
+
+The destination that receives the transferred call will see the payment token in the SIP headers:
+
+**Header Name**: `X-Twilio-Payment-Token`
+**Header Value**: Payment token (e.g., `pk_1234567890abcdef`)
+
+Example SIP INVITE headers:
+```
+User-to-User: CA1234567890abcdef1234567890abcdef
+X-Twilio-Payment-Token: pk_1234567890abcdef
+```
+
+Configure your receiving system to extract and use this token for payment processing.
+
+### Payment Token Details
+
+**Token Type**: One-time use tokenization token
+**Charge Amount**: `0` (no charge during capture, token only)
+**Security Code**: Included if `INCLUDE_CVC=true`
+**Postal Code**: Included if `INCLUDE_POSTAL_CODE=true`
+
+**Token Location**:
+1. Primary: `PaymentToken` field from Pay Sync Map
+2. Fallback: `PaymentSid` (e.g., `PK1234...`) if token unavailable
+
+### Failure Handling
+
+**If payment fails or is cancelled**:
+- System still completes the transfer
+- Call is connected to destination **without** payment token
+- UUI is preserved for tracking
+
+**If REFER data is lost**:
+- Error message played to caller
+- Call hangs up gracefully
+- Error logged to console
+
+**If payment token unavailable**:
+- System uses Payment SID as fallback token
+- Transfer continues with fallback identifier
+
+### Testing
+
+#### Test Case 1: Normal Transfer (Non-Magic Number)
+
+1. **Setup**: Make inbound call to your Twilio number
+2. **Execute**: Agent transfers to real number (e.g., `+15551234567`)
+3. **Expected**: Immediate transfer, no Pay IVR
+4. **Verify**: Check logs for `callReferHandler: Is Pay transfer: false`
+
+#### Test Case 2: Pay-First Transfer (Magic Number)
+
+1. **Setup**: Make inbound call to your Twilio number
+2. **Execute**: Agent transfers to `+19999999999`
+3. **Expected**:
+   - Pay IVR plays to caller
+   - Agent's phone disconnects
+4. **Enter Payment**: Use test card (e.g., `4242424242424242`)
+5. **Expected**: Call reconnects to actual destination
+6. **Verify**:
+   - Check Function logs for REFER details
+   - Check Sync Map for `REFER_CA...` entry
+   - Check receiving system logs for `X-Twilio-Payment-Token` header
+
+#### Test Case 3: Payment Cancellation
+
+1. **Setup**: Make inbound call
+2. **Execute**: Agent transfers to `+19999999999`
+3. **Cancel Payment**: Press cancel/timeout during Pay IVR
+4. **Expected**:
+   - Transfer still completes
+   - No payment token in headers
+   - UUI preserved
+5. **Verify**: Check logs for `Payment cancel, transferring without token`
+
+### Monitoring and Logs
+
+#### Key Log Messages
+
+**callReferHandler (Normal Transfer)**:
+```
+callReferHandler: REFER received for Call CAxxxx
+callReferHandler: Target: sip:+15551234567@domain.com
+callReferHandler: Pay trigger number: +19999999999
+callReferHandler: Is Pay transfer: false
+callReferHandler: Dialing PSTN +15551234567 with UUI CAxxxx
+```
+
+**callReferHandler (Pay-First)**:
+```
+=== SIP REFER TO PAY ===
+Call SID: CAxxxx
+Refer-To: sip:+19999999999@domain.com
+Referred-By: sip:agent@domain.com
+UUI: CA1234567890abcdef
+========================
+callReferHandler: Storing REFER data in Sync Map for key: REFER_CAxxxx
+callReferHandler: Returning <Pay> TwiML for tokenization
+```
+
+**reconnectAfterPay**:
+```
+reconnectAfterPay: Pay completed for Call CAxxxx, Result: success, PaymentSid: PKxxxx
+reconnectAfterPay: Retrieved REFER target: sip:+15551234567@domain.com
+reconnectAfterPay: Added payment token to SIP headers
+reconnectAfterPay: Dialing SIP target: sip:+15551234567@domain?User-to-User=CAxxxx&X-Twilio-Payment-Token=pk_xxxx
+```
+
+#### Viewing Logs
+
+1. **Navigate to Twilio Console** → Monitor → Logs → Functions
+2. **Filter for Functions**:
+   - `callReferHandler` - Shows REFER routing decisions
+   - `reconnectAfterPay` - Shows payment completion and reconnection
+   - `paySyncUpdate` - Shows payment token capture
+3. **Check Sync Maps**:
+   - Navigate to Sync → Your Service → Maps
+   - Check `payMap` for `REFER_CA...` entries (REFER details)
+   - Check `payMap` for `PK...` entries (payment tokens)
+
+### Troubleshooting
+
+#### Issue: Transfer to Magic Number Acts Like Normal Transfer
+
+**Symptoms**: Transferring to PAY_TRIGGER_NUMBER does immediate transfer instead of Pay IVR
+
+**Solutions**:
+- Verify `PAY_TRIGGER_NUMBER` is set in environment variables
+- Check environment file being used (`.env.dev` vs `.env.prod`)
+- Redeploy functions with correct environment configuration
+- Check logs to see what `payTriggerNumber` value is being used
+
+**Debug**:
+```bash
+# Check deployed environment variables
+twilio serverless:list-services
+twilio serverless:list-environments --service-sid <your-service-sid>
+```
+
+#### Issue: Payment Captured But Call Doesn't Reconnect
+
+**Symptoms**: Pay IVR completes, but call hangs up or plays error
+
+**Solutions**:
+- Check `reconnectAfterPay` logs for errors
+- Verify REFER data exists in Sync Map (`REFER_CA...` key)
+- Check payment token was stored in Pay Sync Map
+- Verify destination number format is valid
+
+**Debug Steps**:
+1. Check Sync Map for `REFER_` prefixed items
+2. Verify Payment SID exists in Sync Map
+3. Check `reconnectAfterPay` logs for target SIP URI construction
+
+#### Issue: Payment Token Not in SIP Headers
+
+**Symptoms**: Call reconnects but receiving system doesn't see `X-Twilio-Payment-Token`
+
+**Solutions**:
+- Verify payment result was `success` (check logs)
+- Check payment token was retrieved from Sync Map
+- Verify SIP URI construction includes token parameter
+- Check receiving system's SIP header parsing logic
+
+**Valid SIP Header Format**:
+```
+sip:+15551234567@domain?User-to-User=CAxxxx&X-Twilio-Payment-Token=pk_xxxx
+```
+
+#### Issue: Cannot Change PAY_TRIGGER_NUMBER
+
+**Symptoms**: Want to use different magic number but can't update
+
+**Solutions**:
+1. Update `PAY_TRIGGER_NUMBER` in `.env.dev` or `.env.prod`
+2. Redeploy functions:
+   ```bash
+   pnpm deploy
+   ```
+3. Update Genesys Cloud transfer button configuration with new number
+4. Test with new number
+
+**No code changes needed** - the magic number is fully configurable via environment variable.
+
+### Use Cases
+
+#### 1. Transfer to Billing Department with Payment
+
+**Scenario**: Customer needs to speak to billing but must pay outstanding balance first.
+
+**Flow**:
+1. Customer calls support
+2. Agent determines payment is required
+3. Agent transfers to `PAY_TRIGGER_NUMBER`
+4. Customer enters payment information
+5. Call automatically routes to billing department with payment token
+6. Billing agent sees payment was captured and can process/verify
+
+#### 2. Paid Priority Support
+
+**Scenario**: Company offers premium support that requires payment before routing.
+
+**Flow**:
+1. Customer selects "priority support" option
+2. Agent transfers to `PAY_TRIGGER_NUMBER`
+3. System collects payment token for service fee
+4. Call routes to priority support queue with payment confirmation
+5. Support can charge the service fee using the token
+
+#### 3. Subscription Renewal During Call
+
+**Scenario**: Customer calls about service issue, subscription is expired.
+
+**Flow**:
+1. Agent identifies expired subscription
+2. Agent offers to renew subscription
+3. Agent transfers to `PAY_TRIGGER_NUMBER`
+4. Customer enters payment for renewal
+5. Call routes back to original department with payment token
+6. Agent can complete renewal and continue service discussion
+
+### Security Considerations
+
+**Payment Token Security**:
+- Tokens passed via SIP headers (not public HTTP)
+- One-time use tokens (cannot be reused)
+- Tokens stored in Sync Map with 12-hour TTL
+- No actual charges during tokenization (chargeAmount=0)
+
+**REFER Data Protection**:
+- REFER details stored in secure Sync Map
+- Automatic cleanup after transfer completes
+- Only accessible via authenticated Twilio account
+
+**Destination Validation**:
+- Transfer targets validated before dialing
+- E.164 format required for PSTN numbers
+- Invalid targets rejected with error response
+
+### Architecture Notes
+
+**Why a Magic Number Instead of Other Methods?**
+
+1. **Genesys Cloud Compatibility**: Transfer buttons must contain valid E.164 numbers
+2. **No Special SIP Extensions**: Standard SIP REFER doesn't support custom flags
+3. **Twilio Validation**: Must pass standard phone number validation
+4. **Easy Configuration**: No PBX-specific features or custom SIP headers needed
+5. **Familiar UX**: Agents use standard transfer workflow
+
+**Why Unified Handler?**
+
+The `callReferHandler.js` provides a single entry point that:
+- Eliminates hard-coding of handler URLs
+- Allows dynamic routing based on configuration
+- Simplifies maintenance (one file vs multiple)
+- Enables easy testing (just change env variable)
+- Supports both transfer types from same webhook
+
+**Why Store REFER Details in Sync?**
+
+- Call leg disconnects during Pay (REFER semantics)
+- Original transfer target must be preserved
+- Payment capture can take 30-60 seconds
+- Sync provides reliable storage with TTL
+- Enables reconnection to original destination after payment
 
 

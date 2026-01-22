@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-22
+
+### Changed
+- **BREAKING**: Renamed `/pv/payCompleteTransfer` endpoint to `/pv/reconnectAfterPay`
+- Improved function naming to better reflect purpose: reconnecting calls after payment completion
+- Updated all console log prefixes from `payCompleteTransfer:` to `reconnectAfterPay:` for consistency
+
+### Technical Details
+- Renamed function file: `payCompleteTransfer.js` → `reconnectAfterPay.js`
+- Updated action URL in `callReferHandler.js` to point to new endpoint
+- Updated 16 console log statements to use new naming convention
+- Updated all documentation references in README.md (8 locations)
+- No functional changes - this is a pure refactoring for improved code clarity
+
+### Migration Notes
+- **Action Required**: If you have external integrations or monitoring tools that reference the old endpoint name `/pv/payCompleteTransfer`, update them to `/pv/reconnectAfterPay`
+- **Log Filtering**: Update any log monitoring filters from `payCompleteTransfer:` to `reconnectAfterPay:`
+- The endpoint URL has changed, so Twilio Functions will need to be redeployed for the new endpoint to take effect
+
 ## [2.2.2] - 2025-12-23
 
 ### Changed

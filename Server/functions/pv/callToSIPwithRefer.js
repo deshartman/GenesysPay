@@ -1,19 +1,22 @@
 /**
- * This is the inbound call from PSTN that routes the call to the Customer destination SIP Domain WITH REFER SUPPORT.
+ * Inbound PSTN call handler that routes to Customer SIP Domain WITH REFER SUPPORT
  *
  * Same as callToSIP.js but with answerOnBridge and referUrl for warm transfer capability.
- *
- * The PSTN side call SID is written into a Sync Map as reference, so Pay can be attached.
+ * Uses unified callReferHandler which intelligently routes based on PAY_TRIGGER_NUMBER:
+ * - If agent transfers to PAY_TRIGGER_NUMBER: Initiates Pay-first flow
+ * - If agent transfers to any other number: Normal transfer flow
  *
  * Process:
- * 1) Assume uuiMap exists and create new mapItem with inbound call Sid as key and uui.
- * 2) If it fails, SyncMap uuiMap does not exist, so create it and add new data.
- * 3) Finally, create new call leg with REFER support enabled.
+ * 1) Receive inbound PSTN call
+ * 2) Route call to SIP Domain with REFER support enabled
+ * 3) When SIP agent presses transfer:
+ *    - Transfer to PAY_TRIGGER_NUMBER → Pay IVR, then reconnect with payment token
+ *    - Transfer to normal number → Standard warm transfer
  *
- *  This can also be done using Twiml:
+ * This can also be done using TwiML:
  *
  * <Response>
- *    <Dial answerOnBridge="true" referUrl="/pv/callTransfer" referMethod="POST">
+ *    <Dial answerOnBridge="true" referUrl="/pv/callReferHandler" referMethod="POST">
  *      <Sip
  *        statusCallbackEvent: 'answered',
  *        statusCallback: `{{SERVER_URL}}/sync/uuiSyncUpdate?CallDirection=toSIP&UUI={{CallSid}}`,
@@ -37,7 +40,7 @@ exports.handler = async (context, event, callback) => {
     // Dial SIP URL with REFER support for warm transfers
     voiceResponse.dial({
       answerOnBridge: true,        // Keep caller connected during transfer (warm transfer)
-      referUrl: '/pv/callTransfer', // Webhook for REFER handling
+      referUrl: '/pv/callReferHandler', // Webhook for unified REFER handling (normal transfer or pay-first)
       referMethod: 'POST'
     }).sip(
       {
